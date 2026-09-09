@@ -18,6 +18,7 @@ import { V3, BEAM_GAIN, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel
 import { Centrepiece, ORIGIN } from './centrepieces.js';
 import { Festival } from './festival.js';
 import { Djs, DECK, FIGURE_LIGHT } from './dj.js';
+import { Fireworks } from './fireworks.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
 
@@ -215,6 +216,7 @@ export class Stage {
     this.stageLight = new THREE.PointLight(0xffffff, 4 * LIGHT_K, 50 * WORLD_SCALE, 1.8); this.stageLight.position.set(0, 14, 4); b.add(this.stageLight);
     this.crowd = new Crowd(18000, 1 / WORLD_SCALE); b.add(this.crowd.mesh); if (this.crowd.phones) b.add(this.crowd.phones);
     this.particles = new Particles(16000); this.particles.sizeK = WORLD_SCALE; b.add(this.particles.points);
+    this.fw = new Fireworks(this.particles);   // shells fired from behind the set, bursting over the roof line
   }
 
   // ------------------------------------------------------------ set + LED walls + pixel architecture
@@ -513,6 +515,13 @@ export class Stage {
       const sh = d.show, ph = sh.phase, s = this.style, pal = sh.palette;
       // Peak-phase pyro stays at deck level (cold sparks every 4 bars): the air over the stage is clear between drops.
       if (ph === 'peak' && sh.active && bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
+      // Fireworks over the set through the drop and the peak: a shell or two mid-phrase, a small salvo every 16 bars,
+      // and a finale through the last half minute of the track (Spotify's playback position tells us where the end is).
+      if ((ph === 'drop' || ph === 'peak') && sh.active && (s.pyro ?? 0.6) > 0.3) {
+        const since = bar - this.dropBar, dur = this.track?.duration || 0, finale = dur > 90 && sh.trackPos > dur - 30;
+        if (finale) { if (bar % 2 === 0) this.fw.salvo(pal, bar % 4 === 0 ? 5 : 3, { wide: 1.15, high: 4 }); }
+        else if (since > 0 && since % 8 === 4) this.fw.salvo(pal, since % 16 === 12 ? 3 : this.rng.chance(0.5) ? 2 : 1);
+      }
       this._imagBar(bar, ph, sh);
       if (ph === 'drop' && bar - this.dropBar === 2) this.pickProgram(true, ['wing', 'tower', 'booth', 'top', 'side']);
       if (bar % 4 === 0) this.pickPattern(false);
@@ -534,17 +543,19 @@ export class Stage {
     });
   }
 
-  // Pyro is the only thing that ever goes into the air, and only on the drop: CO2, flames and cold sparks, all short
-  // and anchored to the deck or the roof corners. No confetti, fireworks, comets, water curtains or haze sprites:
-  // the air in front of the stage stays clear, so the set, the screens and the centrepiece are what you see.
+  // Deck pyro is short and anchored to the deck or the roof corners (CO2, flames, cold sparks on the drop), and the
+  // fireworks are fired from behind the set to burst over the roof line: no confetti, water curtains or haze sprites,
+  // nothing hangs in the air between the camera and the stage, so the set, the screens and the centrepiece stay visible.
   _dropFx(confirmed) {
     const s = this.style, sh = this.director.show, pal = sh.palette, t = this.t, pyro = s.pyro ?? 0.6;
     if (!confirmed) {
       if (pyro > 0.2) for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
       if (pyro > 0.4) this.fx.flameUntil = t + 1.0 + pyro;
+      if (pyro > 0.25) this.fw.salvo(pal, sh.dropCount >= 2 ? 6 : 4, { stagger: 0.3 });   // the drop hit: a salvo over the set, bigger on later drops
       return;
     }
     if (pyro > 0.6) this.fx.sparkUntil = t + 3;
+    if (pyro > 0.45) this.fw.salvo(pal, 3, { stagger: 0.45, high: 6 });   // confirmed drop: a second wave, higher
     if (!this.logo.on && t - this.logo.last > 25 && this.rng.chance((s.logoRate ?? 0.7) * 0.5)) this.showLogo(Math.max(3, (sh.period || 0.5) * 8), this.rng.pick(['flicker', 'scale']), 0.7);
   }
 
@@ -552,6 +563,7 @@ export class Stage {
     const pal = this.director.show.palette, t = this.t;
     for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
     this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3;
+    this.fw.salvo(pal, 5, { stagger: 0.3 });
   }
 
   // ------------------------------------------------------------ patterns / programs
@@ -936,6 +948,7 @@ export class Stage {
     if (t < this.fx.flameUntil) for (const x of FLAME_X) pr.flame(x, 2.4, 5.2, 1.1, 8);
     if (t < this.fx.sparkUntil) for (const x of SPARK_X) pr.sparkular(x, 2.4, 4.2, 3, 1.2);
     if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const x of [-46, 46]) pr.flame(x, 32.4, 0, 1.3, 6);
+    this.fw.update(dt);
     pr.update(dt);
   }
 
