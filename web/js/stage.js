@@ -1,4 +1,4 @@
-// MAINSTAGE — the virtual main stage.
+// Virtual-Fest — the virtual main stage.
 //  - set geometry (deck, booth, LED walls, trusses, towers, delay towers)
 //  - fixture rigs: ~330 moving heads, ~170 strobes/blinders, ~50 laser sources (~520 beams),
 //    ~3.8k rig pixels + the artist centrepiece (another 0.5–1.5k pixels, kinetic parts, holo screens)

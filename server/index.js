@@ -1,4 +1,4 @@
-// MAINSTAGE server
+// Virtual-Fest server
 //  - serves the web app + three.js from node_modules
 //  - supervises the native Spotify audio tap and streams raw Float32 PCM over WebSocket
 //  - polls Spotify (AppleScript) for now-playing metadata
@@ -185,7 +185,7 @@ function pollSpotify() {
 }
 
 server.listen(PORT, () => {
-  console.log(`\n  MAINSTAGE  →  http://localhost:${PORT}\n`);
+  console.log(`\n  Virtual-Fest  →  http://localhost:${PORT}\n`);
   startTap();
   setInterval(pollSpotify, POLL_MS);
 });

@@ -1,4 +1,4 @@
-# Mainstage — Spotify-reactive virtual festival stage
+# Virtual-Fest — Spotify-reactive virtual festival stage
 
 A Tomorrowland / Ultra style main stage rendered in the browser (three.js) whose LED walls,
 moving heads, strobes, lasers, pixel architecture, CO2 jets, flames and fireworks react in real

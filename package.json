@@ -1,5 +1,5 @@
 {
-  "name": "mainstage",
+  "name": "virtual-fest",
   "version": "1.0.0",
   "description": "Virtual festival main stage with LED/lighting show driven live by Spotify audio on your Mac",
   "type": "module",
