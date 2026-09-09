@@ -44,7 +44,7 @@ document.getElementById('enter-btn').onclick = async () => {
   enter.classList.add('hide');
   try { await audio.start(); } catch (e) { console.error(e); alert('Audio start failed: ' + (e.message || e)); }
   const q = new URLSearchParams(location.search);
-  if (q.has('demo')) { try { await audio.useDemo(q.get('demo') || undefined); } catch (e) { console.error(e); } }
+  if (q.has('demo')) { try { const a = q.get('demo'); await audio.useDemo(a && a !== '1' && a !== 'true' ? a : undefined); } catch (e) { console.error(e); } }
   hud.refreshStatus();
 };
 
