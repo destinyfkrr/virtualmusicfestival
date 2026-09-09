@@ -303,18 +303,19 @@ export class Stage {
     const H = this.heads = new BeamArray();
     const zoneCounts = {};
     const head = (x, y, z, zone, groupB = false) => { const k = zoneCounts[zone] = (zoneCounts[zone] || 0) + 1; H.add(V3(x, y, z), { zone, k: k - 1, u: 0, side: Math.sign(x), groupB }); };
-    for (const y of [24, 26]) for (let i = 0; i < 29; i++) head(-35 + i * 2.5, y, 6.3, 0);
-    for (const y of [27, 29]) for (let i = 0; i < 24; i++) head(-28.75 + i * 2.5, y, -7.7, 1);
-    for (const y of [30.5, 31.5]) for (let i = 0; i < 27; i++) head(-39 + i * 3, y, -1.7, 2);
+    // Rig size: a third fewer heads than the first cut - the beams should frame the stage, not replace it.
+    for (const y of [24, 26]) for (let i = 0; i < 20; i++) head(-35.15 + i * 3.7, y, 6.3, 0);
+    for (const y of [27, 29]) for (let i = 0; i < 16; i++) head(-28.5 + i * 3.8, y, -7.7, 1);
+    for (const y of [30.5, 31.5]) for (let i = 0; i < 17; i++) head(-38.4 + i * 4.8, y, -1.7, 2);
     for (const side of [-1, 1]) {
-      for (let i = 0; i < 14; i++) head(side * 46.6, 4 + i * 2, 0.8, 3, true);
-      for (let i = 0; i < 9; i++) head(side * 36.6, 4 + i * 2.5, 6.7, 4, true);
-      for (let i = 0; i < 6; i++) { head(side * (26 + i * 2), 3.4, -6.4, 7, true); head(side * (26 + i * 2), 21.6, -6.4, 7, true); }
-      for (let i = 0; i < 6; i++) { const f = i / 5; head(side * (36 - 6 * f), 25 + 3 * f, 6 - 14 * f, 9); }
+      for (let i = 0; i < 10; i++) head(side * 46.6, 4 + i * 2.9, 0.8, 3, true);
+      for (let i = 0; i < 6; i++) head(side * 36.6, 4 + i * 4, 6.7, 4, true);
+      for (let i = 0; i < 4; i++) { const x = side * (26 + i * 10 / 3); head(x, 3.4, -6.4, 7, true); head(x, 21.6, -6.4, 7, true); }
+      for (let i = 0; i < 4; i++) { const f = i / 3; head(side * (36 - 6 * f), 25 + 3 * f, 6 - 14 * f, 9); }
     }
-    for (let i = 0; i < 27; i++) head(-26 + i * 2, 2.4, -9.2, 5, true);
-    for (let i = 0; i < 19; i++) head(-27 + i * 3, 2.4, 5.6, 6, true);
-    for (let i = 0; i < 25; i++) { const a = 0.1 + (Math.PI - 0.2) * i / 24; head(Math.cos(a) * 32.5, 2 + Math.sin(a) * 32.5, -11.5, 8); }
+    for (let i = 0; i < 18; i++) head(-25.5 + i * 3, 2.4, -9.2, 5, true);
+    for (let i = 0; i < 13; i++) head(-27 + i * 4.5, 2.4, 5.6, 6, true);
+    for (let i = 0; i < 16; i++) { const a = 0.1 + (Math.PI - 0.2) * i / 15; head(Math.cos(a) * 32.5, 2 + Math.sin(a) * 32.5, -11.5, 8); }
     s.add(H.build());
     this.headMeta = H.meta;
     for (const m of this.headMeta) m.u = zoneCounts[m.zone] > 1 ? m.k / (zoneCounts[m.zone] - 1) : 0.5;
@@ -344,14 +345,15 @@ export class Stage {
     // sides, the seed is a phase that progresses along the truss, and key pairs the mirrored projectors for the random
     // picks - so a truss throws a wave of fans rather than a web of independently aimed lines.
     const laser = (x, y, z, beams, o, grp) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: 0, key: grp * 100 + Math.round(Math.abs(x)) } }, o)); li++; };
-    for (let i = 0; i < 12; i++) laser(-27.5 + i * 5, 28.6, -7.5, 8, { pitch: -0.05 }, 0);
-    for (let i = 0; i < 8; i++) laser(-31.5 + i * 9, 26.2, 6.4, 8, { pitch: -0.08 }, 1);
+    // 31 projectors (a third fewer than the first cut): the fans read as a few big shapes over the stage, never a web.
+    for (let i = 0; i < 8; i++) laser(-28 + i * 8, 28.6, -7.5, 8, { pitch: -0.05 }, 0);
+    for (let i = 0; i < 6; i++) laser(-31.5 + i * 12.6, 26.2, 6.4, 8, { pitch: -0.08 }, 1);
     for (const side of [-1, 1]) {
-      for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 7, { yaw: -side * 0.4 }, 2);
-      for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 6, { yaw: -side * 0.2, pitch: 0.05 }, 3);
+      for (const y of [8, 17, 26]) laser(side * 46.6, y, 1, 7, { yaw: -side * 0.4 }, 2);
+      for (const x of [29, 35]) laser(side * x, 22, -6.3, 6, { yaw: -side * 0.2, pitch: 0.05 }, 3);
     }
-    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 8, { pitch: 0.35 }, 4);
-    for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
+    for (let i = 0; i < 4; i++) laser(-24 + i * 16, 2.6, -9.5, 8, { pitch: 0.35 }, 4);
+    for (let i = 0; i < 3; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 2; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
     const reach = {};
     for (const src of L.sources) reach[src.meta.grp] = Math.max(reach[src.meta.grp] || 0, Math.abs(src.pos.x));
     for (const src of L.sources) { const m = src.meta; m.u = reach[m.grp] > 0 ? Math.abs(src.pos.x) / reach[m.grp] : 0.5; m.seed = hash(m.grp * 77 + 5) * 6.283 + m.u * 1.4; }

@@ -220,9 +220,9 @@ export const CENTRES = {
   } },
   // Gareth Emery LSR/CTY: a wall of laser sources
   laserwall: { build(b) {
-    for (let i = 0; i < 12; i++) b.laser(V3(-22 + i * 4, 25.5, -4), 8, { yaw: 0, pitch: -0.12, spread: 0.32, meta: { group: 'wall', u: i / 11 } });
+    for (let i = 0; i < 8; i++) b.laser(V3(-21 + i * 6, 25.5, -4), 8, { yaw: 0, pitch: -0.12, spread: 0.32, meta: { group: 'wall', u: i / 7 } });
     b.strip(pathLine(P3(-23, 25.5), P3(23, 25.5), 92), 0.34, 'bar');
-    for (let i = 0; i < 6; i++) b.laser(V3(-20 + i * 8, 6, -4), 6, { pitch: 0.45, spread: 0.5, meta: { group: 'floor', u: i / 5 } });
+    for (let i = 0; i < 4; i++) b.laser(V3(-21 + i * 14, 6, -4), 6, { pitch: 0.45, spread: 0.5, meta: { group: 'floor', u: i / 3 } });
   } },
   spiral: { build(b) {
     b.part(O, 's', { axis: 'z', mode: 'spin', rate: 0.6 });
