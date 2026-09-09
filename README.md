@@ -84,7 +84,8 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   from the brand hue, `genre` = a guest-LD genre palette), never the same mode or palette
   as the previous song, and adds a 4th/5th accent so phrases can rotate colours. Vivid album
   artwork colours (`web/js/palette.js`) are merged in as well. Monochrome brands (some
-  techno acts) only get reorders and small shifts.
+  techno acts) only get reorders and small shifts. Black brand colours become a deep tone of
+  the brand hue (a fixture set to black just goes dark).
 - **Logos** — `server/logos.js` fetches the artist's real logo (TheAudioDB wordmark /
   clear-art, then Wikidata's logo claim, then a Wikimedia Commons search) and caches it in
   `cache/logos/` (misses cached 7 days). `web/js/logos.js` turns it into a screen texture;
@@ -101,10 +102,20 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   volumetric beams), `StrobeArray`, `LaserBank`, `PixelStrips`, `LedPanel`, `Crowd`,
   `Particles`.
 - `web/js/stage.js` — the set: ~330 moving heads, ~170 strobes/blinders, ~50 laser
-  sources (~520 beams), ~3.8k architectural pixels (arches, trusses, towers, frames,
+  sources (~380 beams), ~3.8k architectural pixels (arches, trusses, towers, frames,
   runway, delay towers) plus the centrepiece, the 6k crowd with phone lights, bloom, and
   the camera director (13 shots, drop cuts on the downbeat). The *Lights* density scales
   how many beams and lasers are up at once and how bright they are, so the stage always stays visible.
+  Lasers are run the way a laser operator runs them: the projectors on one truss share a
+  look (mirrored fans, one phase running along the truss) and only one to three of the seven
+  laser groups fire at once, so a drop is a few big coherent fans instead of a web of lines,
+  and every laser is a pure saturated hue no matter what the LED palette is doing. Moving-head
+  beams are narrow and fade along their length like beams in real haze, so a sky full of them
+  stays a sky full of rays rather than a wash. On top of that an auto-iris does what a
+  broadcast camera does: a small pass meters the HDR frame before tone mapping (16×9 cells,
+  read back asynchronously), tracks the brightest quarter of the frame, and closes the
+  exposure by up to a stop when a laser and beam wall starts to blow the stage out, so the
+  stage stays legible through the heaviest drop moments and never dims on a dark wide shot.
 - `web/js/festival.js` — the grounds: sky dome with stars, moon and horizon glow, haze,
   hills and tree lines, a ferris wheel and a drop tower with chasing pixel rims, the FOH
   tower with follow spots, four crowd lighting towers with pixel edges and level meters,

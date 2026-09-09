@@ -71,7 +71,7 @@ const beamFrag = /* glsl */`
   varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying float vDist; varying vec3 vC;
   void main(){
     float along = vUv.y;                              // 1 at the lens, 0 at the far end
-    float fade = pow(along, 1.5);
+    float fade = pow(along, 2.4);                     // haze scatter + inverse square: the far half is a faint tail, not a sky wash
     float rim = abs(dot(normalize(vN), normalize(vV)));
     float soft = pow(rim, 1.6);
     float haze = 0.88 + 0.12 * sin(along * 46.0 - time * 7.0);
@@ -80,8 +80,8 @@ const beamFrag = /* glsl */`
     gl_FragColor = vec4(vC * a, 1.0);
   }`;
 
-const BEAM_LEN = 90;
-function makeBeamGeo(r0 = 0.16, r1 = 3.4) {
+const BEAM_LEN = 80;
+function makeBeamGeo(r0 = 0.16, r1 = 2.0) {   // ~1.3 degree half-angle: a beam fixture, not a wash
   const g = new THREE.CylinderGeometry(r0, r1, BEAM_LEN, 14, 1, true);
   g.translate(0, -BEAM_LEN / 2, 0);
   g.rotateX(-Math.PI / 2); // extends from the origin along +z; a lookAt matrix aims it
@@ -229,7 +229,7 @@ export class LaserBank {
       const D = _v.set(Math.sin(s.yaw) * cp, Math.sin(s.pitch), Math.cos(s.yaw) * cp);
       const R = _v2.set(Math.cos(s.yaw), 0, -Math.sin(s.yaw));
       const U = _v3.crossVectors(D, R).normalize();
-      const k = vis ? s.op * 1.5 : 0;
+      const k = vis ? s.op * 1.1 : 0;    // stay near 1.0 so ACES keeps the beam colour saturated instead of bleaching it
       for (let i = 0; i < s.n; i++) {
         let a, th;
         if (s.mode === 'cone') { a = s.spread * 0.5; th = (i / s.n) * Math.PI * 2 + s.roll; }

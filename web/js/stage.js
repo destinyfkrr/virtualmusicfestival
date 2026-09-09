@@ -13,6 +13,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { V3, BEAM_GAIN, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel, Crowd, Particles, pathLine, pathArc, pathRect } from './fixtures.js';
 import { Centrepiece, ORIGIN } from './centrepieces.js';
 import { Festival } from './festival.js';
@@ -29,6 +30,40 @@ const HI = new Set(['drop', 'peak']);
 const SHOTS = 13;
 const DROP_SHOTS = [0, 3, 5, 8, 4, 12];
 const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// Auto-iris (IrisPass / Stage._readIris / _updateWorld): highlight-priority auto exposure, like a broadcast camera's
+// iris. The composer's HDR buffer (scene + bloom, before tone mapping) is metered into 16x9 cells: each cell is the
+// mean of 64 taps of luminance clamped at IRIS_RANGE, so a beam at 40x counts the same as one at 2x and the meter
+// reads "how much of the cell is blown out". The brightest quarter of the cells (IRIS_TOP) is what the iris keys
+// on: exposure scales so that quarter lands near IRIS_TARGET linear (a dark stage with bright fixtures meters
+// under the target and keeps the base exposure; a laser and beam wall wash meters at 1.5-2 and closes the iris a
+// stop, which also gives the lasers their colour back since ACES bleaches anything that bright).
+const IRIS_W = 16, IRIS_H = 9, EXPO_BASE = 1.05, EXPO_MIN = 0.5, IRIS_RANGE = 2, IRIS_TOP = 36, IRIS_TARGET = 0.47;
+const IRIS_VS = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+const IRIS_FS = `uniform sampler2D tSrc; uniform vec2 uCell; varying vec2 vUv;
+void main() {
+  vec2 acc = vec2(0.0);
+  for (int y = 0; y < 8; y++) for (int x = 0; x < 8; x++) {
+    vec3 c = texture2D(tSrc, vUv + ((vec2(float(x), float(y)) + 0.5) / 8.0 - 0.5) * uCell).rgb;
+    float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    acc += vec2(min(l, ${IRIS_RANGE}.0) / ${IRIS_RANGE}.0, step(1.0, l));
+  }
+  gl_FragColor = vec4(acc / 64.0, 0.0, 1.0);
+}`;
+
+// Sits between the bloom and the output pass, where the composer's read buffer holds the HDR frame.
+class IrisPass extends Pass {
+  constructor(stage) { super(); this.stage = stage; this.needsSwap = false; }
+  render(renderer, writeBuffer, readBuffer) { this.stage._readIris(readBuffer); }
+}
+const _hsl = { h: 0, s: 0, l: 0 };
+// Hue of the first given colour a laser can show, as a monochromatic (fully saturated) laser line. The palette variety
+// modes put white, grey or pastel accents on colorA/colorC at times, and a pale laser bank stacked on the beam wall
+// reads as a white web over the crowd shots; a real laser is a pure hue no matter what the LED palette does.
+const laserColor = (out, ...cols) => {
+  for (const c of cols) { c.getHSL(_hsl, THREE.SRGBColorSpace); if (_hsl.s >= 0.3 && _hsl.l >= 0.12 && _hsl.l <= 0.8) return out.setHSL(_hsl.h, 1, 0.5, THREE.SRGBColorSpace); }
+  cols[0].getHSL(_hsl, THREE.SRGBColorSpace); return out.setHSL(_hsl.h, 1, 0.5, THREE.SRGBColorSpace);
+};
+const _lzA = new THREE.Color(), _lzC = new THREE.Color();
 
 // ---------------------------------------------------------------- tables
 const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
@@ -307,18 +342,23 @@ export class Stage {
     // lasers
     const L = this.lasers = new LaserBank();
     let li = 0;
-    // grp = duty-cycle group (see _driveLasers): only a rotating subset of groups fires at once so single fans stay readable
-    const laser = (x, y, z, beams, o, grp) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: hash(li * 77 + 5) * 6.283 } }, o)); li++; };
-    for (let i = 0; i < 12; i++) laser(-27.5 + i * 5, 28.6, -7.5, 12, { pitch: -0.05 }, 0);
-    for (let i = 0; i < 8; i++) laser(-31.5 + i * 9, 26.2, 6.4, 10, { pitch: -0.08 }, 1);
+    // grp = duty-cycle group (see _driveLasers): only a rotating subset of groups fires at once so single fans stay readable.
+    // Within a group the projectors are driven as one symmetric look: u runs 0 (centre line) to 1 (outer end) on both
+    // sides, the seed is a phase that progresses along the truss, and key pairs the mirrored projectors for the random
+    // picks - so a truss throws a wave of fans rather than a web of independently aimed lines.
+    const laser = (x, y, z, beams, o, grp) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: 0, key: grp * 100 + Math.round(Math.abs(x)) } }, o)); li++; };
+    for (let i = 0; i < 12; i++) laser(-27.5 + i * 5, 28.6, -7.5, 8, { pitch: -0.05 }, 0);
+    for (let i = 0; i < 8; i++) laser(-31.5 + i * 9, 26.2, 6.4, 8, { pitch: -0.08 }, 1);
     for (const side of [-1, 1]) {
-      for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 10, { yaw: -side * 0.4 }, 2);
-      for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 8, { yaw: -side * 0.2, pitch: 0.05 }, 3);
-      for (const ox of [-2, 2]) laser(side * 34 + ox, 16.4, 51.5, 10, { yaw: Math.PI, pitch: 0.02 }, 4);
+      for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 7, { yaw: -side * 0.4 }, 2);
+      for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 6, { yaw: -side * 0.2, pitch: 0.05 }, 3);
+      for (const ox of [-2, 2]) laser(side * 34 + ox, 16.4, 51.5, 6, { yaw: Math.PI, pitch: 0.02 }, 4);
     }
-    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 12, { pitch: 0.35 }, 5);
+    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 8, { pitch: 0.35 }, 5);
     for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 6); }
-    L.sources.forEach((src, i) => { src.meta.u = i / (L.sources.length - 1); });
+    const reach = {};
+    for (const src of L.sources) reach[src.meta.grp] = Math.max(reach[src.meta.grp] || 0, Math.abs(src.pos.x));
+    for (const src of L.sources) { const m = src.meta; m.u = reach[m.grp] > 0 ? Math.abs(src.pos.x) / reach[m.grp] : 0.5; m.seed = hash(m.grp * 77 + 5) * 6.283 + m.u * 1.4; }
     s.add(L.build());
   }
 
@@ -327,7 +367,13 @@ export class Stage {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.12, 0.85);
     this.composer.addPass(this.bloom);
+    this.composer.addPass(new IrisPass(this));
     this.composer.addPass(new OutputPass());
+    const rt = new THREE.WebGLRenderTarget(IRIS_W, IRIS_H, { depthBuffer: false, stencilBuffer: false, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    const mat = new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null }, uCell: { value: new THREE.Vector2(1 / IRIS_W, 1 / IRIS_H) } }, vertexShader: IRIS_VS, fragmentShader: IRIS_FS, depthTest: false, depthWrite: false });
+    const scene = new THREE.Scene();
+    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
+    this.iris = { rt, mat, scene, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), buf: new Uint8Array(IRIS_W * IRIS_H * 4), cells: new Float32Array(IRIS_W * IRIS_H), load: 0, top: 0, blown: 0, blownTop: 0, expo: EXPO_BASE, frame: 0, busy: false, off: false, snapIn: 0 };
   }
 
   // ------------------------------------------------------------ artist / song
@@ -552,10 +598,10 @@ export class Stage {
     else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 12, 10]);
     else next = this.shotOrder[this.shotPtr++ % this.shotOrder.length];
     if (next === this.shotIndex) next = (next + 1) % SHOTS;
-    this.shotIndex = next; this.shotStartBar = sh.barIndex; this.shotTime = 0;
+    this.shotIndex = next; this.shotStartBar = sh.barIndex; this.shotTime = 0; this.iris.snapIn = 4;
   }
   cycleCamera() { this.manualUntil = 0; this.autoCam = true; this.cutCamera(); }
-  setShot(i) { this.manualUntil = 0; this.autoCam = false; this.shotIndex = ((i % SHOTS) + SHOTS) % SHOTS; this.shotTime = 0; this.shotStartBar = this.director.show.barIndex; }
+  setShot(i) { this.manualUntil = 0; this.autoCam = false; this.shotIndex = ((i % SHOTS) + SHOTS) % SHOTS; this.shotTime = 0; this.iris.snapIn = 4; this.shotStartBar = this.director.show.barIndex; }
 
   _updateCamera(dt, show) {
     if (performance.now() < this.manualUntil) { this.controls.update(); return; }
@@ -732,7 +778,7 @@ export class Stage {
     const dip = show.dip || 0, dens = this.density, bar = show.barIndex | 0, dt = show.dt || 0.016;
     // Duty cycling: projectors are split into LASER_GROUPS groups and only a rotating window of them fires at once
     // (window size follows the density setting), so single fans and the stage behind them stay readable.
-    const grpMax = dens < 0.55 ? 2 : dens < 0.85 ? 3 : dens <= 1.02 ? 4 : 5;
+    const grpMax = dens < 0.55 ? 1 : dens < 0.85 ? 2 : dens <= 1.02 ? 3 : 4;
     const rank = this.song.laserRank, rot = this.song.laserRot | 0;
     let op = 0, win = -1, key = 0;   // win < 0 => all groups
     if (ph === 'drop') { if (show.phaseBars < 2) op = 0.62; else { op = 0.78; win = grpMax; key = (bar >> 1) + rot; } }
@@ -743,30 +789,34 @@ export class Stage {
     op *= lz * opMul * Math.sqrt(dens) * (1 - dip);
     if (show.whiteout > 0.6 || lz < 0.12 || !show.active) op = 0;
     const tick = this.laserTick, rainbow = !!s.rainbowLasers, classic = this.song.laserClassic, c = this.tmpC2;
+    const lzA = laserColor(_lzA, show.colorA, show.colorC, show.colorB), lzC = laserColor(_lzC, show.colorC, show.colorB, show.colorA);
+    lzA.getHSL(_hsl, THREE.SRGBColorSpace); const hA = _hsl.h; lzC.getHSL(_hsl, THREE.SRGBColorSpace);
+    const same = Math.abs(frac(hA - _hsl.h + 0.5) - 0.5) < 0.06;
     const srcs = bank.sources, n = srcs.length, ease = Math.min(1, dt * 14);
     for (let i = 0; i < n; i++) {
-      const L = srcs[i], m = L.meta || (L.meta = {}), u = m.u ?? (n > 1 ? i / (n - 1) : 0.5), side = m.side ?? (u < 0.5 ? -1 : 1), sd = m.seed ?? i;
+      const L = srcs[i], m = L.meta || (L.meta = {}), u = m.u ?? (n > 1 ? i / (n - 1) : 0.5), side = m.side ?? (u < 0.5 ? -1 : 1), sd = m.seed ?? i, key = m.key ?? i;
       if (m.yaw0 === undefined) { m.yaw0 = L.yaw; m.pitch0 = L.pitch; m.opS = 0; }
       const gOn = win < 0 || m.grp === undefined || ((rank[m.grp] + key) % LASER_GROUPS) < win;   // centre-piece lasers have no group: always in
       const base = m.yaw0, bpitch = m.pitch0;
+      // Yaw offsets and rolls are mirrored by side, and the seed only shifts phase (never rate), so a truss keeps one
+      // symmetric, coherent look over time.
       let yaw, pitch, spread, roll;
       switch (pat) {
-        case 'scan': yaw = base + Math.sin(t * 1.3 + sd * 3) * 0.9; pitch = bpitch - 0.28 + 0.08 * Math.sin(t * 0.7 + sd); spread = 0.12 + 0.1 * kick; roll = 0; break;
-        case 'tunnel': yaw = base - side * 0.25 + Math.sin(t * 0.3) * 0.25; pitch = bpitch - 0.1 + 0.1 * Math.sin(t * 0.4); spread = 0.05 + 0.6 * (1 - bp); roll = t * 1.5 + sd; break;
-        case 'kick': { const h1 = hash(i * 17 + tick * 101), h2 = hash(i * 29 + tick * 101 + 7), h3 = hash(i * 43 + tick * 101 + 13); yaw = base + (h1 - 0.5) * 1.6; pitch = bpitch + (h2 - 0.5) * 0.5; spread = 0.3 + h3 * 0.6; roll = h1 * 3; break; }
-        case 'sky': yaw = base + Math.sin(t * 0.35 + sd) * 0.6; pitch = 0.55 + 0.25 * Math.sin(t * 0.5 + sd); spread = 0.5 + 0.4 * Math.sin(t * 0.4 + sd * 2); roll = t * 0.7 + sd; break;
-        case 'cross': yaw = base - side * 0.9 + Math.sin(t * 0.9 + sd) * 0.35; pitch = bpitch - 0.08 + 0.2 * Math.sin(t * 1.1 + sd * 4); spread = 0.25 + 0.4 * kick; roll = Math.sin(t * 0.5 + sd) * 0.6; break;
-        case 'liquid': yaw = base + Math.sin(t * 0.4 + sd) * 0.5; pitch = bpitch + 0.15 + 0.2 * Math.sin(t * 0.6 + sd); spread = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(t * 0.8 + sd * 5)); roll = t * (2 + sd * 0.3); break;
-        default: yaw = base + side * 0.35 + Math.sin(t * (0.6 + u * 0.5) + sd) * 0.5; pitch = bpitch - 0.05 + 0.22 * Math.sin(t * 0.9 + sd * 6); spread = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.5 + sd * 8)) + 0.5 * kick; roll = Math.sin(t * 0.4 + sd * 6) * 0.9;
+        case 'scan': yaw = base + side * Math.sin(t * 1.3 + sd) * 0.9; pitch = bpitch - 0.28 + 0.08 * Math.sin(t * 0.7 + sd); spread = 0.12 + 0.1 * kick; roll = 0; break;
+        case 'tunnel': yaw = base + side * (Math.sin(t * 0.3 + sd * 0.2) * 0.25 - 0.25); pitch = bpitch - 0.1 + 0.1 * Math.sin(t * 0.4); spread = 0.05 + 0.6 * (1 - bp); roll = side * (t * 1.5 + sd); break;
+        case 'kick': { const h1 = hash(key * 17 + tick * 101), h2 = hash(key * 29 + tick * 101 + 7), h3 = hash(key * 43 + tick * 101 + 13); yaw = base + side * (h1 - 0.5) * 1.6; pitch = bpitch + (h2 - 0.5) * 0.5; spread = 0.3 + h3 * 0.6; roll = side * h1 * 3; break; }
+        case 'sky': yaw = base + side * Math.sin(t * 0.35 + sd) * 0.6; pitch = 0.55 + 0.25 * Math.sin(t * 0.5 + sd); spread = 0.5 + 0.4 * Math.sin(t * 0.4 + sd + 2); roll = side * (t * 0.7 + sd); break;
+        case 'cross': yaw = base + side * (Math.sin(t * 0.9 + sd) * 0.35 - 0.9); pitch = bpitch - 0.08 + 0.2 * Math.sin(t * 1.1 + sd + 4); spread = 0.25 + 0.4 * kick; roll = side * Math.sin(t * 0.5 + sd) * 0.6; break;
+        case 'liquid': yaw = base + side * Math.sin(t * 0.4 + sd) * 0.5; pitch = bpitch + 0.15 + 0.2 * Math.sin(t * 0.6 + sd); spread = 0.1 + 0.9 * (0.5 + 0.5 * Math.sin(t * 0.8 + sd + 5)); roll = side * (t * 2.5 + sd); break;
+        default: yaw = base + side * (0.35 + Math.sin(t * 0.7 + sd) * 0.5); pitch = bpitch - 0.05 + 0.22 * Math.sin(t * 0.9 + sd + 6); spread = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.5 + sd + 8)) + 0.5 * kick; roll = side * Math.sin(t * 0.4 + sd + 6) * 0.9;
       }
       if (L.mode === 'cone') spread = Math.min(spread, 0.7);
       L.yaw = yaw; L.pitch = pitch; L.spread = spread; L.roll = roll;
       m.opS += ((gOn ? op : 0) - m.opS) * ease;
       L.op = m.opS * (pat === 'kick' ? 0.5 + 0.5 * kick : 1);
       if (rainbow) c.setHSL(frac(t * 0.08 + u * 0.6 + (i & 1) * 0.3), 1, 0.55);
-      else if (classic) c.copy((i & 1) ? GREEN : show.colorA).lerp(WHITE, 0.05);
-      else c.copy((i & 1) === 0 ? show.colorC : show.colorA).lerp(WHITE, 0.1);
-      c.multiplyScalar(1.15);
+      else if (classic) c.copy((i & 1) ? GREEN : lzA).lerp(WHITE, 0.03);
+      else { c.copy((i & 1) === 0 ? lzC : lzA).lerp(WHITE, 0.02); if (same && (i & 1) === 0) c.offsetHSL(0.1, 0, 0); }
       L.color.copy(c);
     }
     bank.update();
@@ -827,7 +877,13 @@ export class Stage {
     const target = 0.46 - 0.26 * load + 0.08 * show.kick * (hi ? 1 : 0.3) + 0.3 * show.whiteout;
     this.bloomS += (target - this.bloomS) * Math.min(1, dt * 5);
     this.bloom.strength = this.bloomS;
-    this.renderer.toneMappingExposure = 1.05 + 0.25 * show.whiteout;
+    // Auto-iris: scale the exposure so the brightest quarter of the frame sits near the target (laser + beam walls
+    // in the low shots close it a stop) - fast attack, slower release - and re-adapt at once a few frames after a
+    // cut, like a camera switch. Strobes flicker faster than the attack, so the iris rides them instead of pumping.
+    const I = this.iris, expoT = clamp(EXPO_BASE * IRIS_TARGET / Math.max(I.top, 0.05), EXPO_MIN, EXPO_BASE);
+    if (I.snapIn > 0 && --I.snapIn === 0) I.expo = expoT;
+    else I.expo += (expoT - I.expo) * Math.min(1, dt * (expoT < I.expo ? 8 : 2.5));
+    this.renderer.toneMappingExposure = I.expo + 0.25 * show.whiteout;
   }
 
   resize() {
@@ -839,4 +895,30 @@ export class Stage {
   }
 
   render() { this.composer.render(); }
+
+  // Meters the composer's HDR buffer into a 16x9 byte target and reads it back without a stall (PBO + fence);
+  // every other frame is plenty for an iris. Any failure switches the iris off and the exposure settles at its base.
+  _readIris(src) {
+    const I = this.iris;
+    if (!I || I.off || I.busy || !src || (I.frame++ & 1)) return;
+    const r = this.renderer, prev = r.getRenderTarget();
+    try {
+      I.mat.uniforms.tSrc.value = src.texture;
+      r.setRenderTarget(I.rt); r.render(I.scene, I.cam); r.setRenderTarget(prev);
+      I.busy = true;
+      r.readRenderTargetPixelsAsync(I.rt, 0, 0, IRIS_W, IRIS_H, I.buf).then(() => {
+        // Per channel: R = mean clamped luminance (0..IRIS_RANGE), G = share of taps over 1.0 (blown). Each gives a
+        // frame mean (load, blown) and a mean of the brightest quarter (top, blownTop); the iris keys on top.
+        const b = I.buf, cells = I.cells, n = cells.length, scale = [IRIS_RANGE, 1], out = ['load', 'blown'], outTop = ['top', 'blownTop'];
+        for (let ch = 0; ch < 2; ch++) {
+          let sum = 0;
+          for (let i = 0; i < n; i++) { const v = b[i * 4 + ch] / 255 * scale[ch]; cells[i] = v; sum += v; }
+          cells.sort(); let top = 0;
+          for (let i = n - IRIS_TOP; i < n; i++) top += cells[i];
+          I[out[ch]] = sum / n; I[outTop[ch]] = top / IRIS_TOP;
+        }
+        I.busy = false;
+      }, (e) => { I.off = true; I.busy = false; I.load = 0; console.warn('auto-iris off:', e); });
+    } catch (e) { r.setRenderTarget(prev); I.off = true; I.busy = false; I.load = 0; console.warn('auto-iris off:', e); }
+  }
 }

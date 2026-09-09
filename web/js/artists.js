@@ -334,7 +334,17 @@ const GENERIC_CENTRES = {
 const PALETTE_MODES = ['signature', 'shift', 'blend', 'harmony', 'genre'];
 let lastPaletteKey = '', lastPaletteMode = '';
 
+// Black is a brand colour, not a light colour: a fixture set to it just goes dark, so half the rig looks broken for
+// a phrase. Palettes that carry it (the monochrome techno brands) get a deep tone of their own hue instead, or a
+// steel blue when the brand has no hue at all; the blackouts those brands want come from the dark style knob.
+export function lightable(base) {
+  const chroma = base.filter((h) => !isNeutral(h));
+  const h = chroma[0] ? hexToHsl(chroma[0]).h : 0.62;
+  return base.map((hex) => (hexToHsl(hex).l < 0.12 ? hslToHex(h, chroma[0] ? 0.8 : 0.55, 0.32) : hex));
+}
+
 export function varyPalette(base, genrePalettes, rng, variety = 1, matched = true) {
+  base = lightable(base);
   const chroma = base.filter((h) => !isNeutral(h));
   const hasWhite = base.some((h) => hexToHsl(h).l > 0.93);
   const primary = chroma[0] ? hexToHsl(chroma[0]).h : rng.next();
