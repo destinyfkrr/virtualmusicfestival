@@ -6,7 +6,7 @@
 //   PixelStrips  LED pixel dots along arbitrary paths (instanced boxes with instanceColor)
 //   LedPanel     canvas-driven LED screens with a dot-matrix shader
 //   Crowd        shader-animated audience + phone lights (no per-frame CPU work)
-//   Particles    CO2, flames, sparkulars, confetti, fireworks
+//   Particles    CO2, flames, sparkulars
 import * as THREE from 'three';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion();
@@ -432,7 +432,7 @@ export class Crowd {
   }
 }
 
-// ---------------------------------------------------------------- particles (CO2, flames, sparkulars, confetti, fireworks)
+// ---------------------------------------------------------------- particles (CO2, flames, sparkulars)
 export class Particles {
   constructor(capacity = 16000) {
     this.cap = capacity;
@@ -503,33 +503,6 @@ export class Particles {
       v.set((Math.random() - 0.5) * 4.5, (18 + Math.random() * 9) * height, (Math.random() - 0.5) * 4.5);
       this._c.setRGB(1.8, 1.55, 1.0);
       this.spawn(p, v, this._c, 1.2 + Math.random() * 1.0, 0.55 + Math.random() * 0.6, 0.5, 13, 0.25);
-    }
-  }
-  /** confetti burst: slow tumbling flakes in the palette colours */
-  confetti(x, y, z, colors, n = 320) {
-    const p = this._p.set(x, y, z), v = this._v;
-    const white = new THREE.Color(1, 1, 1);
-    for (let k = 0; k < n; k++) {
-      v.set((Math.random() - 0.5) * 30, 8 + Math.random() * 16, (Math.random() - 0.5) * 30);
-      const c = Math.random() < 0.25 ? white : colors[k % colors.length];
-      this._c.copy(c).multiplyScalar(1.3);
-      this.spawn(p, v, this._c, 5 + Math.random() * 4, 1.1 + Math.random() * 1.0, 1.6, 2.2, 0.02);
-    }
-  }
-  firework(x, y, z, color, n = 320) {
-    const p = this._p.set(x, y, z), v = this._v;
-    const c2 = new THREE.Color(1, 1, 1);
-    for (let k = 0; k < n; k++) {
-      v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(14 + Math.random() * 16);
-      this.spawn(p, v, Math.random() < 0.8 ? color : c2, 1.4 + Math.random() * 1.2, 1.2 + Math.random() * 1.2, 0.9, 9, 0.35);
-    }
-  }
-  /** comet: a rising trail that bursts (call once; the burst is scheduled by the caller) */
-  streamer(x, z, color) {
-    const p = this._p.set(x, 2.5, z), v = this._v;
-    for (let k = 0; k < 40; k++) {
-      v.set((Math.random() - 0.5) * 2, 30 + Math.random() * 12, (Math.random() - 0.5) * 2);
-      this.spawn(p, v, color, 1.6 + Math.random() * 0.4, 1.2, 0.3, 12, 0.3);
     }
   }
   update(dt) {

@@ -1,6 +1,5 @@
 // Festival grounds — everything around the main stage so the arena reads as a real festival site:
 //   Sky          gradient dome (horizon glow towards the stage, aurora in breakdowns) + moon
-//   Haze         additive atmosphere sprites over the field, tinted by the palette
 //   Landscape    hills + treeline silhouettes + lit trees framing the arena
 //   FerrisWheel  rotating wheel with its own pixel rim/spokes (rainbow chase, beat flashes)
 //   DropTower    drop-tower ride: rises during builds, free-falls on the drop
@@ -92,43 +91,6 @@ export class Sky {
     u.uAurora.value.copy(B).lerp(_c.copy(show.colorC), 0.5).multiplyScalar(0.28);
     const target = ph === 'breakdown' ? 1 : ph === 'intro' ? 0.8 : ph === 'idle' ? 0.5 : ph === 'build' ? 0.45 : 0.18;
     u.uAuroraK.value += (target - u.uAuroraK.value) * Math.min(1, show.dt * 0.6);
-  }
-}
-
-// ---------------------------------------------------------------- haze (additive sprites over the field)
-export class Haze {
-  constructor() {
-    this.group = new THREE.Group();
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
-    const ctx = cv.getContext('2d');
-    const g = ctx.createRadialGradient(128, 64, 0, 128, 64, 128);
-    g.addColorStop(0, 'rgba(255,255,255,0.5)'); g.addColorStop(0.5, 'rgba(255,255,255,0.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.scale(1, 0.5); ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
-    const tex = new THREE.CanvasTexture(cv);
-    this.sprites = [];
-    const spots = [];
-    for (const z of [12, 26, 42, 62, 86, 112]) for (const xk of [-0.7, -0.25, 0.25, 0.7]) spots.push([xk * halfW(z) * 0.9, 3 + z * 0.06 + Math.random() * 2, z + (Math.random() - 0.5) * 6]);
-    for (const p of spots) {
-      const m = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0.05 });
-      const sp = new THREE.Sprite(m); sp.position.set(p[0], p[1], p[2]);
-      const w = 34 + p[2] * 0.4; sp.scale.set(w, w * 0.42, 1);
-      sp.userData.ph = Math.random() * 6.28; sp.userData.k = 0.7 + Math.random() * 0.6;
-      this.group.add(sp); this.sprites.push(sp);
-    }
-    this.hit = 0;
-  }
-  puff(k = 1) { this.hit = Math.min(1.5, this.hit + k); }
-  update(show) {
-    const ph = show.phase, dark = ph === 'breakdown' || ph === 'intro' || ph === 'idle';
-    this.hit *= Math.exp(-show.dt * 0.35);
-    const base = (dark ? 0.045 : 0.03) + 0.03 * show.energy + 0.05 * this.hit + 0.04 * show.whiteout;
-    const dip = 1 - 0.8 * (show.dip || 0);
-    for (let i = 0; i < this.sprites.length; i++) {
-      const sp = this.sprites[i], m = sp.material, ud = sp.userData;
-      const tw = 0.8 + 0.2 * Math.sin(show.t * 0.4 + ud.ph);
-      m.opacity = base * ud.k * tw * dip;
-      m.color.copy(i & 1 ? show.colorB : show.colorA).lerp(_c.setRGB(1, 1, 1), 0.45);
-    }
   }
 }
 
@@ -653,11 +615,10 @@ export class GroundGlow {
 }
 
 export class Festival {
-  constructor(scene, crowd, particles, mainMat) {
-    this.scene = scene; this.crowd = crowd; this.particles = particles;
+  constructor(scene, crowd, mainMat) {
+    this.scene = scene; this.crowd = crowd;
     this.px = new PixelStrips('sphere');
     this.sky = new Sky(); scene.add(this.sky.group);
-    this.haze = new Haze(); scene.add(this.haze.group);
     this.land = new Landscape(); scene.add(this.land.group);
     this.wheel = new FerrisWheel(V3(-108, 0, 78), 0); scene.add(this.wheel.group);
     this.tower = new DropTower(V3(112, 0, 84)); scene.add(this.tower.group);
@@ -684,7 +645,6 @@ export class Festival {
   update(show, dt, levels) {
     show.levels = levels;
     this.sky.update(show);
-    this.haze.update(show);
     this.wheel.update(show, dt);
     this.tower.update(show, dt);
     this.towers.update(show, dt);
@@ -710,39 +670,5 @@ export class Festival {
       }
     }
     this.px.commit();
-  }
-  // --- extra pyro helpers (particles) ---
-  /** CO2 jet from any point (roof-truss ends, wings) */
-  jet(x, y, z, dir, color, n = 160) {
-    const pr = this.particles, p = pr._p.set(x, y, z), v = pr._v;
-    const c = color ? pr._c.copy(color).lerp(_c2.setRGB(1, 1, 1), 0.7) : pr._c.setRGB(1, 1, 1);
-    for (let k = 0; k < n; k++) { v.set((Math.random() - 0.5) * 5 + dir * 9, 20 + Math.random() * 16, (Math.random() - 0.5) * 4); pr.spawn(p, v, c, 1.0 + Math.random() * 0.8, 1.5 + Math.random() * 2.5, 2.6, 4, 0.35); }
-    this.haze.puff(0.4);
-  }
-  /** water jets from the deck front: call every frame while on */
-  water(n = 4) {
-    const pr = this.particles, p = pr._p, v = pr._v;
-    for (const x of [-25, -15, -5, 5, 15, 25]) for (let k = 0; k < n; k++) {
-      p.set(x + (Math.random() - 0.5) * 0.4, 2.4, 6.4);
-      v.set((Math.random() - 0.5) * 1.5, 19 + Math.random() * 5, 2 + Math.random() * 2);
-      _c.setRGB(0.55, 0.85, 1.2).multiplyScalar(0.8 + Math.random() * 0.4);
-      pr.spawn(p, v, _c, 2.4 + Math.random() * 0.5, 0.9 + Math.random() * 0.6, 0.15, 9.5, 0.25);
-    }
-  }
-  /** golden gerb waterfall from the front truss: call every frame while on */
-  waterfall(n = 2) {
-    const pr = this.particles, p = pr._p, v = pr._v;
-    for (let x = -32; x <= 32; x += 4) for (let k = 0; k < n; k++) {
-      p.set(x + (Math.random() - 0.5) * 1.2, 24.3, 6.4);
-      v.set((Math.random() - 0.5) * 1.2, -2 - Math.random() * 3, (Math.random() - 0.5) * 1.2);
-      _c.setRGB(1.7, 1.25, 0.5);
-      pr.spawn(p, v, _c, 2.0 + Math.random() * 0.8, 0.5 + Math.random() * 0.5, 0.3, 5, 0.5);
-    }
-  }
-  /** comet: rising trail then a burst 1.3 s later */
-  comet(x, z, color) {
-    const pr = this.particles;
-    pr.streamer(x, z, color);
-    setTimeout(() => pr.firework(x, 38 + Math.random() * 8, z, color, 360), 1300);
   }
 }

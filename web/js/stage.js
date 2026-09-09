@@ -292,9 +292,9 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ lighting rig
-  // ---- festival grounds: sky, haze, landscape, rides, towers, wristbands, festoons, gate, dressing
+  // ---- festival grounds: sky, landscape, rides, towers, wristbands, festoons, gate, dressing
   _buildFestival() {
-    this.fest = new Festival(this.big, this.crowd, this.particles, this.mainPanel.mat);
+    this.fest = new Festival(this.big, this.crowd, this.mainPanel.mat);
   }
 
   _buildRig() {
@@ -481,16 +481,8 @@ export class Stage {
     d.on('pyro', () => this._dropFx(true));
     d.on('bar', (bar) => {
       const sh = d.show, ph = sh.phase, s = this.style, pal = sh.palette;
-      if (ph === 'peak' && sh.active) {
-        if (bar % 2 === 0 && (s.pyro ?? 0.6) > 0.35 && this.rng.chance(s.pyro ?? 0.6)) { const x = (bar % 4 === 0 ? -1 : 1) * (14 + (bar % 8) * 1.4); this.particles.co2(x, 4.5, 1, pal[bar % pal.length]); }
-        if (bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
-        if (bar % 8 === 4 && (s.pyro ?? 0.6) > 0.6) this.particles.firework((Math.random() - 0.5) * 70, 45 + Math.random() * 20, -35, pal[bar % pal.length]);
-        if (bar % 16 === 8 && (s.confetti ?? 0.3) > 0.5 && this.rng.chance(s.confetti)) for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 200);
-        if (bar % 8 === 6 && (s.pyro ?? 0.6) > 0.3) for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[(bar + 1) % pal.length], 140);
-        if (bar % 16 === 0 && (s.pyro ?? 0.6) > 0.5 && this.rng.chance(0.7)) this.fx.fallUntil = this.t + 2.2;
-        if (bar % 8 === 2 && (s.pyro ?? 0.6) > 0.3 && this.rng.chance(0.6)) this.fx.waterUntil = this.t + 1.4;
-        if (bar % 16 === 12 && (s.pyro ?? 0.6) > 0.6 && this.rng.chance(0.6)) for (const x of [-30, 30]) this.fest.comet(x, 8, pal[bar % pal.length]);
-      }
+      // Peak-phase pyro stays at deck level (cold sparks every 4 bars): the air over the stage is clear between drops.
+      if (ph === 'peak' && sh.active && bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
       if (ph === 'drop' && bar - this.dropBar === 2) this.pickProgram(true, ['wing', 'tower', 'booth', 'top', 'side']);
       if (bar % 4 === 0) this.pickPattern(false);
       if (bar % 8 === 0 && this.t - this.lastProgPick > 12) this.pickProgram(false);
@@ -511,31 +503,24 @@ export class Stage {
     });
   }
 
+  // Pyro is the only thing that ever goes into the air, and only on the drop: CO2, flames and cold sparks, all short
+  // and anchored to the deck or the roof corners. No confetti, fireworks, comets, water curtains or haze sprites:
+  // the air in front of the stage stays clear, so the set, the screens and the centrepiece are what you see.
   _dropFx(confirmed) {
     const s = this.style, sh = this.director.show, pal = sh.palette, t = this.t, pyro = s.pyro ?? 0.6;
     if (!confirmed) {
       if (pyro > 0.2) for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
       if (pyro > 0.4) this.fx.flameUntil = t + 1.0 + pyro;
-      if (pyro > 0.3) for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[1 % pal.length], 180);
-      if (pyro > 0.5 && this.rng.chance(0.5)) this.fx.waterUntil = t + 1.6;
       return;
     }
-    if (pyro > 0.5 && this.rng.chance(0.75)) for (let k = 0; k < 3; k++) setTimeout(() => this.particles.firework((Math.random() - 0.5) * 80, 40 + Math.random() * 25, -30 - Math.random() * 20, pal[k % pal.length]), k * 250);
-    if ((s.confetti ?? 0.3) > 0.2 && (sh.dropCount >= 2 || this.rng.chance(0.4)) && this.rng.chance(s.confetti ?? 0.3)) for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 260);
     if (pyro > 0.6) this.fx.sparkUntil = t + 3;
-    if (pyro > 0.5 && this.rng.chance(0.6)) this.fx.fallUntil = t + 2.5;
-    if (pyro > 0.6 && this.rng.chance(0.5)) for (const x of [-30, 30]) this.fest.comet(x, 8, pal[2 % pal.length]);
     if (!this.logo.on && t - this.logo.last > 25 && this.rng.chance((s.logoRate ?? 0.7) * 0.5)) this.showLogo(Math.max(3, (sh.period || 0.5) * 8), this.rng.pick(['flicker', 'scale']), 0.7);
   }
 
   triggerPyro() {
     const pal = this.director.show.palette, t = this.t;
     for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
-    this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3; this.fx.fallUntil = t + 2.5; this.fx.waterUntil = t + 1.8;
-    for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[1 % pal.length], 180);
-    for (const x of [-30, 30]) this.fest.comet(x, 8, pal[2 % pal.length]);
-    for (let k = 0; k < 3; k++) setTimeout(() => this.particles.firework((Math.random() - 0.5) * 80, 40 + Math.random() * 25, -30 - Math.random() * 20, pal[k % pal.length]), k * 250);
-    for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 260);
+    this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3;
   }
 
   // ------------------------------------------------------------ patterns / programs
@@ -856,8 +841,6 @@ export class Stage {
     const t = this.t, pr = this.particles;
     if (t < this.fx.flameUntil) for (const x of FLAME_X) pr.flame(x, 2.4, 5.2, 1.1, 8);
     if (t < this.fx.sparkUntil) for (const x of SPARK_X) pr.sparkular(x, 2.4, 4.2, 3, 1.2);
-    if (t < this.fx.waterUntil) this.fest.water(3);
-    if (t < this.fx.fallUntil) this.fest.waterfall(2);
     if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const x of [-46, 46]) pr.flame(x, 32.4, 0, 1.3, 6);
     pr.update(dt);
   }

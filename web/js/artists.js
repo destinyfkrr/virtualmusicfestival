@@ -11,29 +11,29 @@ import { hexToHsl, hslToHex, shiftHue, hueDist, isNeutral, vivid, paletteKey } f
 // ------------------------------------------------------------------ genre presets
 // style weights are 0..1 (>1 allowed for "signature" emphasis):
 //   pyro flames/CO2/sparkulars/fireworks, lasers, strobes, beams, white (tendency to go white on drops),
-//   dark (how dark the stage sits between hits), confetti, kinetic (moving set pieces), hits (pyro per drop)
-const S = (o) => Object.assign({ pyro: 0.6, lasers: 0.6, strobes: 0.8, beams: 1, white: 0.5, dark: 0.35, confetti: 0.3, kinetic: 0.6, logoRate: 0.7, artColors: true, rainbowLasers: false }, o);
+//   dark (how dark the stage sits between hits), kinetic (moving set pieces), hits (pyro per drop)
+const S = (o) => Object.assign({ pyro: 0.6, lasers: 0.6, strobes: 0.8, beams: 1, white: 0.5, dark: 0.35, kinetic: 0.6, logoRate: 0.7, artColors: true, rainbowLasers: false }, o);
 
 export const GENRES = {
-  bigroom:       { bpm: [126, 132], style: S({ pyro: 0.95, lasers: 0.7, strobes: 1, white: 0.7, confetti: 0.5 }), palettes: [['#ffffff', '#ff2a2a', '#1e90ff'], ['#ffffff', '#ff8a00', '#2b5cff'], ['#ffd23f', '#ff2bd6', '#ffffff']], programs: ['chevrons', 'bars', 'tunnel', 'rays', 'flash', 'grid', 'logo'] },
-  progressive:   { bpm: [124, 130], style: S({ pyro: 0.7, lasers: 0.6, white: 0.75, confetti: 0.4 }), palettes: [['#ffffff', '#2bd7ff', '#ff9a3c'], ['#2b5cff', '#ffffff', '#ff5ac8'], ['#ffd27f', '#5ac8ff', '#ffffff']], programs: ['waves', 'rays', 'tunnel', 'aurora', 'chevrons', 'starfield', 'logo'] },
+  bigroom:       { bpm: [126, 132], style: S({ pyro: 0.95, lasers: 0.7, strobes: 1, white: 0.7 }), palettes: [['#ffffff', '#ff2a2a', '#1e90ff'], ['#ffffff', '#ff8a00', '#2b5cff'], ['#ffd23f', '#ff2bd6', '#ffffff']], programs: ['chevrons', 'bars', 'tunnel', 'rays', 'flash', 'grid', 'logo'] },
+  progressive:   { bpm: [124, 130], style: S({ pyro: 0.7, lasers: 0.6, white: 0.75 }), palettes: [['#ffffff', '#2bd7ff', '#ff9a3c'], ['#2b5cff', '#ffffff', '#ff5ac8'], ['#ffd27f', '#5ac8ff', '#ffffff']], programs: ['waves', 'rays', 'tunnel', 'aurora', 'chevrons', 'starfield', 'logo'] },
   house:         { bpm: [120, 128], style: S({ pyro: 0.4, lasers: 0.45, strobes: 0.6, white: 0.4, dark: 0.3 }), palettes: [['#ff5ac8', '#ffd23f', '#5ac8ff'], ['#ff8a1a', '#ff2bd6', '#ffffff'], ['#5ac8ff', '#ffffff', '#ff6a3c']], programs: ['disco', 'blobs', 'waves', 'bars', 'grid', 'rings', 'logo'] },
   techhouse:     { bpm: [124, 130], style: S({ pyro: 0.3, lasers: 0.6, strobes: 0.85, white: 0.6, dark: 0.45 }), palettes: [['#ffffff', '#ff2a2a', '#111111'], ['#ffffff', '#ffd23f', '#ff2bd6'], ['#00e5ff', '#ffffff', '#ff5ac8']], programs: ['scan', 'bars', 'strobeBars', 'rings', 'grid', 'noise', 'logo'] },
-  techno:        { bpm: [128, 140], style: S({ pyro: 0, lasers: 0.5, strobes: 1, white: 0.9, dark: 0.85, confetti: 0, artColors: false }), palettes: [['#ffffff', '#8a8a8a', '#202020'], ['#ffffff', '#ff1a1a', '#111111'], ['#e8e8ff', '#4a4aff', '#101018']], programs: ['scan', 'strobeBars', 'noise', 'shards', 'rings', 'lines', 'logo'] },
-  hardtechno:    { bpm: [140, 160], style: S({ pyro: 0.1, lasers: 0.6, strobes: 1.2, white: 0.9, dark: 0.85, confetti: 0, artColors: false }), palettes: [['#ff1a1a', '#ffffff', '#000000'], ['#ffffff', '#ff2a00', '#111111']], programs: ['strobeBars', 'scan', 'shards', 'noise', 'flash', 'logo'] },
-  melodictechno: { bpm: [120, 126], style: S({ pyro: 0.1, lasers: 0.75, strobes: 0.6, white: 0.6, dark: 0.7, confetti: 0 }), palettes: [['#2b5cff', '#7a2bff', '#ffffff'], ['#00e5ff', '#ffffff', '#1a1a3a'], ['#ff6a3c', '#ffd27f', '#5ac8ff']], programs: ['aurora', 'particles', 'tunnel', 'rings', 'starfield', 'lines', 'figure', 'logo'] },
-  afterlife:     { bpm: [120, 126], style: S({ pyro: 0, lasers: 0.4, strobes: 0.7, white: 0.95, dark: 0.85, confetti: 0, artColors: false }), palettes: [['#ffffff', '#b0b0b0', '#202020'], ['#e0e6ff', '#5a6cff', '#0a0a14']], programs: ['figure', 'noise', 'particles', 'lines', 'aurora', 'logo'] },
+  techno:        { bpm: [128, 140], style: S({ pyro: 0, lasers: 0.5, strobes: 1, white: 0.9, dark: 0.85, artColors: false }), palettes: [['#ffffff', '#8a8a8a', '#202020'], ['#ffffff', '#ff1a1a', '#111111'], ['#e8e8ff', '#4a4aff', '#101018']], programs: ['scan', 'strobeBars', 'noise', 'shards', 'rings', 'lines', 'logo'] },
+  hardtechno:    { bpm: [140, 160], style: S({ pyro: 0.1, lasers: 0.6, strobes: 1.2, white: 0.9, dark: 0.85, artColors: false }), palettes: [['#ff1a1a', '#ffffff', '#000000'], ['#ffffff', '#ff2a00', '#111111']], programs: ['strobeBars', 'scan', 'shards', 'noise', 'flash', 'logo'] },
+  melodictechno: { bpm: [120, 126], style: S({ pyro: 0.1, lasers: 0.75, strobes: 0.6, white: 0.6, dark: 0.7 }), palettes: [['#2b5cff', '#7a2bff', '#ffffff'], ['#00e5ff', '#ffffff', '#1a1a3a'], ['#ff6a3c', '#ffd27f', '#5ac8ff']], programs: ['aurora', 'particles', 'tunnel', 'rings', 'starfield', 'lines', 'figure', 'logo'] },
+  afterlife:     { bpm: [120, 126], style: S({ pyro: 0, lasers: 0.4, strobes: 0.7, white: 0.95, dark: 0.85, artColors: false }), palettes: [['#ffffff', '#b0b0b0', '#202020'], ['#e0e6ff', '#5a6cff', '#0a0a14']], programs: ['figure', 'noise', 'particles', 'lines', 'aurora', 'logo'] },
   trance:        { bpm: [132, 140], style: S({ pyro: 0.65, lasers: 0.85, strobes: 0.8, white: 0.6, beams: 1.1 }), palettes: [['#2b5cff', '#7a2bff', '#ffffff'], ['#ffffff', '#ff2bd6', '#2bd7ff'], ['#00e5ff', '#ff6a00', '#ffffff']], programs: ['tunnel', 'rays', 'starfield', 'waves', 'aurora', 'chevrons', 'logo'] },
   psytrance:     { bpm: [138, 146], style: S({ pyro: 0.5, lasers: 1.1, strobes: 0.9, white: 0.4, rainbowLasers: true }), palettes: [['#ff7a00', '#00ff88', '#ff2bd6'], ['#7fff00', '#ff2bd6', '#00d4ff'], ['#ffd23f', '#7a2bff', '#00ffcc']], programs: ['tunnel', 'mandala', 'rays', 'noise', 'rings', 'logo'] },
   futurehouse:   { bpm: [124, 128], style: S({ pyro: 0.5, lasers: 0.7, strobes: 0.85, white: 0.5 }), palettes: [['#00e5ff', '#ff2bd6', '#ffffff'], ['#ffffff', '#7a2bff', '#00ffcc']], programs: ['grid', 'hexes', 'bars', 'chevrons', 'tunnel', 'logo'] },
-  bass:          { bpm: [140, 150], style: S({ pyro: 0.45, lasers: 1.1, strobes: 1.1, white: 0.35, dark: 0.7, confetti: 0.1 }), palettes: [['#00ff66', '#ff2a00', '#7a2bff'], ['#ff2a2a', '#00e5ff', '#ffffff'], ['#7fff00', '#ff00aa', '#ffffff']], programs: ['glitch', 'shards', 'bars', 'flash', 'tunnel', 'noise', 'logo'] },
-  melodicbass:   { bpm: [140, 150], style: S({ pyro: 0.9, lasers: 0.85, strobes: 0.85, white: 0.6, confetti: 0.6 }), palettes: [['#ff7a1a', '#1a8cff', '#ffffff'], ['#ff5ac8', '#5ac8ff', '#ffffff'], ['#ffd27f', '#7a2bff', '#ffffff']], programs: ['aurora', 'rays', 'starfield', 'chevrons', 'particles', 'tunnel', 'logo'] },
+  bass:          { bpm: [140, 150], style: S({ pyro: 0.45, lasers: 1.1, strobes: 1.1, white: 0.35, dark: 0.7 }), palettes: [['#00ff66', '#ff2a00', '#7a2bff'], ['#ff2a2a', '#00e5ff', '#ffffff'], ['#7fff00', '#ff00aa', '#ffffff']], programs: ['glitch', 'shards', 'bars', 'flash', 'tunnel', 'noise', 'logo'] },
+  melodicbass:   { bpm: [140, 150], style: S({ pyro: 0.9, lasers: 0.85, strobes: 0.85, white: 0.6 }), palettes: [['#ff7a1a', '#1a8cff', '#ffffff'], ['#ff5ac8', '#5ac8ff', '#ffffff'], ['#ffd27f', '#7a2bff', '#ffffff']], programs: ['aurora', 'rays', 'starfield', 'chevrons', 'particles', 'tunnel', 'logo'] },
   dnb:           { bpm: [170, 176], style: S({ pyro: 0.45, lasers: 1.1, strobes: 1.1, white: 0.5, dark: 0.55 }), palettes: [['#ff2a2a', '#ffffff', '#111111'], ['#ff2bd6', '#2bd7ff', '#ffffff'], ['#7fff00', '#ffffff', '#ff2a2a']], programs: ['glitch', 'scan', 'bars', 'lines', 'flash', 'tunnel', 'logo'] },
-  hardstyle:     { bpm: [148, 156], style: S({ pyro: 1.1, lasers: 0.8, strobes: 1.2, white: 0.7, confetti: 0.4 }), palettes: [['#ff1a1a', '#ffffff', '#111111'], ['#ff6a00', '#ffffff', '#ffd23f'], ['#ffffff', '#2b5cff', '#ff1a1a']], programs: ['flash', 'chevrons', 'rays', 'bars', 'shards', 'tunnel', 'logo'] },
+  hardstyle:     { bpm: [148, 156], style: S({ pyro: 1.1, lasers: 0.8, strobes: 1.2, white: 0.7 }), palettes: [['#ff1a1a', '#ffffff', '#111111'], ['#ff6a00', '#ffffff', '#ffd23f'], ['#ffffff', '#2b5cff', '#ff1a1a']], programs: ['flash', 'chevrons', 'rays', 'bars', 'shards', 'tunnel', 'logo'] },
   hardcore:      { bpm: [160, 200], style: S({ pyro: 0.9, lasers: 0.8, strobes: 1.3, white: 0.6, dark: 0.6 }), palettes: [['#ff0000', '#111111', '#ffffff'], ['#ff2a00', '#ffd23f', '#111111']], programs: ['flash', 'shards', 'glitch', 'strobeBars', 'logo'] },
   trap:          { bpm: [140, 160], style: S({ pyro: 0.6, lasers: 0.8, strobes: 1, white: 0.4, dark: 0.6 }), palettes: [['#ff2a2a', '#ffffff', '#111111'], ['#ffd23f', '#111111', '#ffffff'], ['#7a2bff', '#ff2bd6', '#ffffff']], programs: ['glitch', 'flash', 'bars', 'shards', 'grid', 'logo'] },
   tropical:      { bpm: [100, 120], style: S({ pyro: 0.4, lasers: 0.25, strobes: 0.4, white: 0.35, dark: 0.3 }), palettes: [['#ff9a3c', '#ffd27f', '#3cc6ff'], ['#ff6a3c', '#ffd23f', '#5ac8ff'], ['#ff5ac8', '#ffd27f', '#5ac8ff']], programs: ['aurora', 'waves', 'blobs', 'disco', 'sun', 'logo'] },
-  popdance:      { bpm: [118, 128], style: S({ pyro: 0.75, lasers: 0.55, strobes: 0.8, white: 0.55, confetti: 1 }), palettes: [['#ffffff', '#ff2bd6', '#5ac8ff'], ['#ffd23f', '#ff6a3c', '#ffffff'], ['#7a2bff', '#ff5ac8', '#ffffff']], programs: ['rays', 'chevrons', 'bars', 'disco', 'waves', 'flash', 'logo'] },
+  popdance:      { bpm: [118, 128], style: S({ pyro: 0.75, lasers: 0.55, strobes: 0.8, white: 0.55 }), palettes: [['#ffffff', '#ff2bd6', '#5ac8ff'], ['#ffd23f', '#ff6a3c', '#ffffff'], ['#7a2bff', '#ff5ac8', '#ffffff']], programs: ['rays', 'chevrons', 'bars', 'disco', 'waves', 'flash', 'logo'] },
   afrohouse:     { bpm: [118, 124], style: S({ pyro: 0.3, lasers: 0.4, strobes: 0.5, white: 0.4, dark: 0.5 }), palettes: [['#ffd27f', '#ff8a1a', '#ffffff'], ['#ff6a3c', '#ffd23f', '#5ac8ff']], programs: ['sun', 'blobs', 'waves', 'rings', 'aurora', 'logo'] },
   melodic:       { bpm: [118, 128], style: S({ pyro: 0.4, lasers: 0.6, strobes: 0.5, white: 0.5, dark: 0.5 }), palettes: [['#ff5ac8', '#5ac8ff', '#ffffff'], ['#ffd27f', '#ff6a3c', '#5ac8ff'], ['#ffffff', '#7a2bff', '#00ffcc']], programs: ['aurora', 'particles', 'starfield', 'waves', 'blobs', 'logo'] },
 };
@@ -46,28 +46,28 @@ const A = (id, names, genre, palette, mark, centre, style = {}, markText) => ART
 // --- big room / mainstage
 A('garrix', 'martin garrix|area21|ytram|garrix', 'bigroom', ['#ffffff', '#ff2e2e', '#2b7bff', '#ffb000'], 'plusx', 'plus', { pyro: 1.1, lasers: 0.6, white: 0.8, logoRate: 1 });
 A('hardwell', 'hardwell', 'bigroom', ['#ff1a1a', '#ffffff', '#0066ff'], 'hardwell', 'frame', { pyro: 1, strobes: 1.1 });
-A('dvlm', 'dimitri vegas & like mike|dimitri vegas|like mike|dvlm', 'bigroom', ['#ff0033', '#ffd500', '#ffffff'], 'starA', 'towers', { pyro: 1.2, confetti: 0.7 });
+A('dvlm', 'dimitri vegas & like mike|dimitri vegas|like mike|dvlm', 'bigroom', ['#ff0033', '#ffd500', '#ffffff'], 'starA', 'towers', { pyro: 1.2 });
 A('tiesto', 'tiësto|tiesto|dj tiesto', 'house', ['#00c2ff', '#ff2bd6', '#ffffff'], 'bird', 'arch', { pyro: 0.8, lasers: 0.7 });
-A('guetta', 'david guetta|jack back', 'house', ['#ff3b3b', '#ffffff', '#2e6bff'], 'bars', 'towers', { pyro: 0.85, confetti: 0.6 });
+A('guetta', 'david guetta|jack back', 'house', ['#ff3b3b', '#ffffff', '#2e6bff'], 'bars', 'towers', { pyro: 0.85 });
 A('afrojack', 'afrojack|nlw|kapuchon', 'bigroom', ['#ff7a00', '#ffffff', '#2b2bff'], 'arrowA', 'triangle', { pyro: 0.9 });
 A('nickyromero', 'nicky romero|monocule', 'progressive', ['#ffffff', '#2ecfff', '#ff3b3b'], 'triangleA', 'triangle', { white: 0.8 });
 A('ww', 'w&w|nwyr|willem & wardt', 'bigroom', ['#ff0000', '#ffffff', '#ffcc00'], 'ww', 'towers', { pyro: 1.1, strobes: 1.2 });
 A('blasterjaxx', 'blasterjaxx', 'bigroom', ['#ff5500', '#ffffff', '#ff0033'], 'xx', 'hex', { pyro: 1 });
 A('kshmr', 'kshmr', 'bigroom', ['#ffcc33', '#ff8800', '#ffffff'], 'text', 'arch', { pyro: 0.95, lasers: 0.6, artColors: false }, 'KSHMR');
-A('timmytrumpet', 'timmy trumpet', 'bigroom', ['#ffd700', '#ff3300', '#ffffff'], 'trumpet', 'towers', { pyro: 1.1, confetti: 0.6 });
-A('aoki', 'steve aoki', 'bigroom', ['#00e5ff', '#ff2bd6', '#ffffff'], 'face', 'towers', { pyro: 0.9, confetti: 0.8 });
+A('timmytrumpet', 'timmy trumpet', 'bigroom', ['#ffd700', '#ff3300', '#ffffff'], 'trumpet', 'towers', { pyro: 1.1 });
+A('aoki', 'steve aoki', 'bigroom', ['#00e5ff', '#ff2bd6', '#ffffff'], 'face', 'towers', { pyro: 0.9 });
 A('alesso', 'alesso', 'progressive', ['#ffffff', '#5ac8ff', '#ff5ac8'], 'text', 'ring', { white: 0.8, pyro: 0.8 }, 'ALESSO');
 A('shm', 'swedish house mafia|axwell|sebastian ingrosso|steve angello|axwell & ingrosso|axwell λ ingrosso|axwell /\\ ingrosso', 'progressive', ['#ffffff', '#ff1a1a', '#161616'], 'threeDots', 'rings', { lasers: 1.1, strobes: 1.1, white: 0.9, pyro: 0.7, artColors: false, logoRate: 1 });
 A('avicii', 'avicii|tim berg', 'progressive', ['#ffffff', '#00d1ff', '#ff9f1a'], 'avicii', 'triangle', { pyro: 0.7, white: 0.8 });
-A('zedd', 'zedd', 'popdance', ['#ffffff', '#2b5cff', '#ff2bd6'], 'zedd', 'orbit', { pyro: 1, confetti: 1, kinetic: 1 });
+A('zedd', 'zedd', 'popdance', ['#ffffff', '#2b5cff', '#ff2bd6'], 'zedd', 'orbit', { pyro: 1, kinetic: 1 });
 A('kygo', 'kygo', 'tropical', ['#ff9a3c', '#ffd27f', '#3cc6ff'], 'text', 'x', { pyro: 0.85, lasers: 0.3 }, 'KYGO');
 A('alanwalker', 'alan walker', 'popdance', ['#ffffff', '#1e90ff', '#7fdcff'], 'aw', 'triangle', { white: 0.7, artColors: false });
-A('marshmello', 'marshmello', 'popdance', ['#ffffff', '#ff00aa', '#00d4ff'], 'helmet', 'sphere', { pyro: 0.8, confetti: 0.9 });
+A('marshmello', 'marshmello', 'popdance', ['#ffffff', '#ff00aa', '#00d4ff'], 'helmet', 'sphere', { pyro: 0.8 });
 A('chainsmokers', 'the chainsmokers|chainsmokers', 'popdance', ['#ffffff', '#ff6a00', '#8a2bff'], 'star', 'ring', { pyro: 0.85 });
 A('calvinharris', 'calvin harris|love regenerator', 'popdance', ['#ffffff', '#ff2bd6', '#5ac8ff'], 'text', 'arch', { pyro: 0.8 }, 'CALVIN HARRIS');
-A('diplo', 'diplo|major lazer|lsd|silk city|thomas wesley', 'popdance', ['#ff2a2a', '#ffd23f', '#00d4ff'], 'text', 'towers', { pyro: 0.8, confetti: 0.9 }, 'DIPLO');
-A('dillon', 'dillon francis', 'popdance', ['#ff5ac8', '#ffd23f', '#00e5ff'], 'text', 'arch', { confetti: 0.8 }, 'DILLON FRANCIS');
-A('galantis', 'galantis', 'popdance', ['#ffffff', '#ff5ac8', '#5ac8ff'], 'text', 'ring', { confetti: 1 }, 'GALANTIS');
+A('diplo', 'diplo|major lazer|lsd|silk city|thomas wesley', 'popdance', ['#ff2a2a', '#ffd23f', '#00d4ff'], 'text', 'towers', { pyro: 0.8 }, 'DIPLO');
+A('dillon', 'dillon francis', 'popdance', ['#ff5ac8', '#ffd23f', '#00e5ff'], 'text', 'arch', {}, 'DILLON FRANCIS');
+A('galantis', 'galantis', 'popdance', ['#ffffff', '#ff5ac8', '#5ac8ff'], 'text', 'ring', {}, 'GALANTIS');
 A('r3hab', 'r3hab', 'bigroom', ['#ffffff', '#ff2a2a', '#2b5cff'], 'text', 'hex', {}, 'R3HAB');
 A('quintino', 'quintino', 'bigroom', ['#ffffff', '#ff6a00', '#2b5cff'], 'text', 'towers', {}, 'QUINTINO');
 A('deorro', 'deorro', 'bigroom', ['#ff2bd6', '#ffd23f', '#00e5ff'], 'text', 'towers', { pyro: 0.9 }, 'DEORRO');
@@ -83,7 +83,7 @@ A('bassjackers', 'bassjackers', 'bigroom', ['#ff2a2a', '#ffffff', '#111111'], 't
 A('showtek', 'showtek', 'bigroom', ['#ff1a1a', '#ffffff', '#111111'], 'text', 'towers', { pyro: 1 }, 'SHOWTEK');
 A('ummet', 'ummet ozcan', 'bigroom', ['#ff6a00', '#ffffff', '#7a2bff'], 'text', 'hex', {}, 'UMMET OZCAN');
 A('tujamo', 'tujamo', 'bigroom', ['#ffffff', '#ff2bd6', '#00e5ff'], 'text', 'towers', {}, 'TUJAMO');
-A('nervo', 'nervo', 'bigroom', ['#ff5ac8', '#ffffff', '#5ac8ff'], 'text', 'arch', { confetti: 0.7 }, 'NERVO');
+A('nervo', 'nervo', 'bigroom', ['#ff5ac8', '#ffffff', '#5ac8ff'], 'text', 'arch', {}, 'NERVO');
 A('lucassteve', 'lucas & steve', 'futurehouse', ['#ffffff', '#ff2bd6', '#2bd7ff'], 'text', 'hex', {}, 'LUCAS & STEVE');
 A('firebeatz', 'firebeatz', 'bigroom', ['#ff6a00', '#ffffff', '#ff2a2a'], 'text', 'towers', {}, 'FIREBEATZ');
 A('sickindividuals', 'sick individuals', 'progressive', ['#ffffff', '#2b5cff', '#ff2a2a'], 'text', 'triangle', {}, 'SICK INDIVIDUALS');
@@ -107,7 +107,7 @@ A('gryffin', 'gryffin', 'melodic', ['#ffffff', '#ff9a3c', '#5ac8ff'], 'text', 'c
 A('porter', 'porter robinson|virtual self', 'melodic', ['#ff5ac8', '#5ac8ff', '#ffffff'], 'text', 'arch', { pyro: 0.5 }, 'PORTER ROBINSON');
 A('madeon', 'madeon', 'melodic', ['#ff2bd6', '#2bd7ff', '#ffd23f'], 'text', 'frame', {}, 'MADEON');
 A('flume', 'flume', 'melodic', ['#ff5ac8', '#5ac8ff', '#ffffff'], 'text', 'sphere', { lasers: 0.5 }, 'FLUME');
-A('odesza', 'odesza', 'melodic', ['#ffffff', '#ffd27f', '#5ac8ff'], 'odesza', 'circle', { pyro: 1, lasers: 0.9, confetti: 0.7 });
+A('odesza', 'odesza', 'melodic', ['#ffffff', '#ffd27f', '#5ac8ff'], 'odesza', 'circle', { pyro: 1, lasers: 0.9 });
 A('rufus', 'rüfüs du sol|rufus du sol|rüfüs|rufus', 'melodic', ['#ff6a3c', '#ffd27f', '#5ac8ff'], 'text', 'arch', { pyro: 0.5 }, 'RÜFÜS DU SOL');
 A('fredagain', 'fred again..|fred again|fred again.', 'house', ['#ffffff', '#ff9a3c', '#5ac8ff'], 'text', 'frame', { pyro: 0.5 }, 'FRED AGAIN..');
 A('bicep', 'bicep', 'melodic', ['#ff5ac8', '#00d4ff', '#ffffff'], 'text', 'frame', { lasers: 0.8 }, 'BICEP');
@@ -116,7 +116,7 @@ A('bonobo', 'bonobo', 'melodic', ['#ffd27f', '#5ac8ff', '#ffffff'], 'text', 'arc
 // --- bass / dubstep / trap
 A('skrillex', 'skrillex|dog blood|jack ü|jack u', 'bass', ['#ff0000', '#ffffff', '#00ff66'], 'text', 'towers', { lasers: 1.2, strobes: 1.1, dark: 0.6, white: 0.35, rainbowLasers: true, logoRate: 0.8 }, 'SKRILLEX');
 A('excision', 'excision', 'bass', ['#00ff66', '#ff2a00', '#7a2bff'], 'xJag', 'towers', { lasers: 1.2, strobes: 1.1, dark: 0.8, pyro: 0.6, logoRate: 1 });
-A('illenium', 'illenium', 'melodicbass', ['#ff7a1a', '#1a8cff', '#ffffff'], 'phoenix', 'circle', { pyro: 1.1, confetti: 0.7, logoRate: 1 });
+A('illenium', 'illenium', 'melodicbass', ['#ff7a1a', '#1a8cff', '#ffffff'], 'phoenix', 'circle', { pyro: 1.1, logoRate: 1 });
 A('sevenlions', 'seven lions', 'melodicbass', ['#7a2bff', '#2bd7ff', '#ffffff'], 'text', 'arch', { lasers: 0.9 }, 'SEVEN LIONS');
 A('subtronics', 'subtronics', 'bass', ['#00ff88', '#ff00aa', '#ffffff'], 'eye', 'towers', { lasers: 1.1, dark: 0.8 });
 A('zedsdead', 'zeds dead', 'bass', ['#ff3b3b', '#ffffff', '#3bff9f'], 'text', 'towers', {}, 'ZEDS DEAD');
@@ -136,7 +136,7 @@ A('svddendeath', 'svdden death|voyd', 'bass', ['#ff2a2a', '#000000', '#ffffff'],
 A('virtualriot', 'virtual riot', 'bass', ['#00e5ff', '#ff2bd6', '#ffffff'], 'text', 'towers', {}, 'VIRTUAL RIOT');
 A('wooli', 'wooli', 'bass', ['#7a2bff', '#00ff88', '#ffffff'], 'text', 'towers', {}, 'WOOLI');
 A('bassnectar', 'bassnectar', 'bass', ['#7a2bff', '#00e5ff', '#ff2bd6'], 'text', 'towers', { lasers: 1 }, 'BASSNECTAR');
-A('griz', 'griz', 'bass', ['#ffd23f', '#ff2bd6', '#5ac8ff'], 'text', 'arch', { confetti: 0.6 }, 'GRIZ');
+A('griz', 'griz', 'bass', ['#ffd23f', '#ff2bd6', '#5ac8ff'], 'text', 'arch', {}, 'GRIZ');
 A('liquidstranger', 'liquid stranger', 'bass', ['#00ff88', '#7a2bff', '#ffffff'], 'text', 'towers', {}, 'LIQUID STRANGER');
 A('ganja', 'ganja white night', 'bass', ['#7fff00', '#ff2bd6', '#ffffff'], 'text', 'towers', {}, 'GANJA WHITE NIGHT');
 A('snails', 'snails', 'bass', ['#7fff00', '#ff2a2a', '#ffffff'], 'text', 'towers', {}, 'SNAILS');
@@ -161,8 +161,8 @@ A('astrix', 'astrix', 'psytrance', ['#00ffcc', '#ff2bd6', '#ffd23f'], 'text', 'h
 A('ace', 'ace ventura', 'psytrance', ['#ff7a00', '#00e5ff', '#ff2bd6'], 'text', 'hex', {}, 'ACE VENTURA');
 
 // --- progressive / techno crossover
-A('prydz', 'eric prydz|pryda|cirez d|tonja holma|holo', 'progressive', ['#00e5ff', '#ffffff', '#2b5cff'], 'cube', 'holo', { lasers: 0.9, strobes: 0.6, dark: 0.55, white: 0.6, pyro: 0, confetti: 0, artColors: false, logoRate: 0.5 });
-A('deadmau5', 'deadmau5|testpilot|kx5', 'progressive', ['#ff1a1a', '#161616', '#ffffff'], 'mau5', 'cube', { pyro: 0, lasers: 0.8, dark: 0.7, confetti: 0, artColors: false, logoRate: 1 });
+A('prydz', 'eric prydz|pryda|cirez d|tonja holma|holo', 'progressive', ['#00e5ff', '#ffffff', '#2b5cff'], 'cube', 'holo', { lasers: 0.9, strobes: 0.6, dark: 0.55, white: 0.6, pyro: 0, artColors: false, logoRate: 0.5 });
+A('deadmau5', 'deadmau5|testpilot|kx5', 'progressive', ['#ff1a1a', '#161616', '#ffffff'], 'mau5', 'cube', { pyro: 0, lasers: 0.8, dark: 0.7, artColors: false, logoRate: 1 });
 A('anyma', 'anyma|tale of us|mrak|mind against|adriatique|massano|kevin de vries|argy|colyn|innellea|afterlife', 'afterlife', ['#ffffff', '#b0b0b0', '#202020'], 'anyma', 'megawall', { logoRate: 0.6 });
 A('bodzin', 'stephan bodzin', 'melodictechno', ['#ffffff', '#00e5ff', '#7a2bff'], 'text', 'sphere', {}, 'STEPHAN BODZIN');
 A('benbohmer', 'ben böhmer|ben bohmer', 'melodictechno', ['#ffd27f', '#ff6a3c', '#5ac8ff'], 'text', 'arch', {}, 'BEN BÖHMER');
@@ -197,7 +197,7 @@ A('marcocarola', 'marco carola', 'techhouse', ['#ffffff', '#ff6a00', '#111111'],
 A('capriati', 'joseph capriati', 'techno', ['#ffffff', '#00e5ff', '#111111'], 'text', 'oval', {}, 'JOSEPH CAPRIATI');
 
 // --- tech house
-A('fisher', 'fisher', 'techhouse', ['#ffffff', '#ff3b3b', '#ffd23f'], 'text', 'ring', { pyro: 0.6, confetti: 0.6 }, 'FISHER');
+A('fisher', 'fisher', 'techhouse', ['#ffffff', '#ff3b3b', '#ffd23f'], 'text', 'ring', { pyro: 0.6 }, 'FISHER');
 A('chrislake', 'chris lake', 'techhouse', ['#ffffff', '#2bd7ff', '#ff2bd6'], 'text', 'ring', {}, 'CHRIS LAKE');
 A('domdolla', 'dom dolla', 'techhouse', ['#ffffff', '#ff6a00', '#7a2bff'], 'text', 'ring', {}, 'DOM DOLLA');
 A('johnsummit', 'john summit', 'techhouse', ['#ffffff', '#ff2a2a', '#2b5cff'], 'text', 'ring', { pyro: 0.5 }, 'JOHN SUMMIT');
@@ -212,7 +212,7 @@ A('heldens', 'oliver heldens|hi-lo|hilo', 'futurehouse', ['#ffffff', '#00e5ff', 
 A('dondiablo', 'don diablo|camp kubrick', 'futurehouse', ['#00e5ff', '#ff2bd6', '#ffffff'], 'hexagon', 'hex', { logoRate: 1 });
 A('matroda', 'matroda', 'techhouse', ['#ffffff', '#ff6a00', '#111111'], 'text', 'ring', {}, 'MATRODA');
 A('noizu', 'noizu', 'techhouse', ['#ffffff', '#00e5ff', '#ff2bd6'], 'text', 'ring', {}, 'NOIZU');
-A('peggygou', 'peggy gou', 'house', ['#ff5ac8', '#ffd23f', '#5ac8ff'], 'text', 'ring', { confetti: 0.5 }, 'PEGGY GOU');
+A('peggygou', 'peggy gou', 'house', ['#ff5ac8', '#ffd23f', '#5ac8ff'], 'text', 'ring', {}, 'PEGGY GOU');
 A('honeydijon', 'honey dijon', 'house', ['#ffd23f', '#ff2bd6', '#ffffff'], 'text', 'ring', {}, 'HONEY DIJON');
 
 // --- hardstyle / hardcore
@@ -222,7 +222,7 @@ A('coone', 'coone', 'hardstyle', ['#ff2a2a', '#ffd23f', '#ffffff'], 'text', 'tow
 A('wildstylez', 'wildstylez', 'hardstyle', ['#ffffff', '#ff2a2a', '#2b5cff'], 'text', 'towers', {}, 'WILDSTYLEZ');
 A('subzero', 'sub zero project', 'hardstyle', ['#00e5ff', '#ffffff', '#111111'], 'text', 'towers', {}, 'SUB ZERO PROJECT');
 A('dblock', 'd-block & s-te-fan|d-block and s-te-fan', 'hardstyle', ['#ffffff', '#ff2a2a', '#111111'], 'text', 'towers', {}, 'D-BLOCK & S-TE-FAN');
-A('datweekaz', 'da tweekaz', 'hardstyle', ['#ffd23f', '#ff2bd6', '#00e5ff'], 'text', 'towers', { confetti: 0.8 }, 'DA TWEEKAZ');
+A('datweekaz', 'da tweekaz', 'hardstyle', ['#ffd23f', '#ff2bd6', '#00e5ff'], 'text', 'towers', {}, 'DA TWEEKAZ');
 A('sefa', 'sefa', 'hardcore', ['#ffffff', '#ff2a2a', '#111111'], 'text', 'towers', {}, 'SEFA');
 A('angerfist', 'angerfist', 'hardcore', ['#ff0000', '#111111', '#ffffff'], 'jagged', 'towers', { dark: 0.7 });
 A('rand', 'ran-d', 'hardstyle', ['#ff2a2a', '#ffffff', '#111111'], 'text', 'towers', {}, 'RAN-D');

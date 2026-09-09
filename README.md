@@ -1,12 +1,12 @@
 # Virtual-Fest — Spotify-reactive virtual festival
 
 A Tomorrowland / Ultra style festival rendered in the browser (three.js): a main stage whose LED
-walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames, water and fireworks
+walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames and cold sparks
 react in real time to whatever your Mac's Spotify app is playing — beat-grid locked, with a
 per-artist stage design, a per-song colour theme and the artist's real logo on the screens —
 set in full festival grounds (crowd, lighting towers, ferris wheel, drop tower, entrance gate,
-festoons, sky). The set is built twice life size around a human-scale crowd, the way the big
-festival main stages dwarf the field in front of them.
+festoons, sky). The set is built four times life size around a human-scale crowd, the way the
+big festival main stages dwarf the field in front of them, and every camera stays on the stage.
 
 Audio is captured with a macOS Core Audio *process tap* (macOS 14.2+), so no virtual audio
 driver (BlackHole etc.) is needed and Spotify keeps playing through your speakers.
@@ -118,12 +118,12 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   read back asynchronously), tracks the brightest quarter of the frame, and closes the
   exposure by up to a stop when a laser and beam wall starts to blow the stage out, so the
   stage stays legible through the heaviest drop moments and never dims on a dark wide shot.
-- `web/js/festival.js` — the grounds: sky dome with stars, moon and horizon glow, haze,
+- `web/js/festival.js` — the grounds: sky dome with stars, moon and horizon glow,
   hills and tree lines, a ferris wheel and a drop tower with chasing pixel rims, four crowd
   lighting towers with pixel edges and level meters, six perimeter skytrackers, wristbands
   that pulse with the show, festoon strings over the field, the entrance gate with its pixel-outlined VIRTUAL-FEST sign, a lit
   cobble path with bollards and lamp posts, stage-colour light spill on the grass, and the
-  stage dressing (PA hangs, subs, side screens, water jets, waterfall, flame bars, comets).
+  stage dressing (PA hangs, subs, side screens, flame bars).
 
 ## Debugging
 
