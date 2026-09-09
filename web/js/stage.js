@@ -13,7 +13,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { V3, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel, Crowd, Particles, pathLine, pathArc, pathRect } from './fixtures.js';
+import { V3, BEAM_GAIN, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel, Crowd, Particles, pathLine, pathArc, pathRect } from './fixtures.js';
 import { Centrepiece, ORIGIN } from './centrepieces.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
@@ -28,7 +28,9 @@ const SHOTS = 10;
 const DROP_SHOTS = [0, 3, 5, 8, 4];
 
 // ---------------------------------------------------------------- tables
-const HEAD_BASE = { idle: 0.08, intro: 0.3, groove: 0.45, build: 0.55, drop: 0.85, peak: 0.72, breakdown: 0.22 };
+const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
+const LASER_GROUPS = 7; // back truss, front truss, towers, wings, delay towers, deck, arch cones
+const DENSITY_PRESETS = [['low', 0.45], ['med', 0.7], ['high', 1.0]];
 const HEAD_SETS = {
   idle: ['slowSweep', 'skySearch'],
   intro: ['slowSweep', 'skySearch', 'fanUp', 'circles', 'tiltWave'],
@@ -111,21 +113,25 @@ export class Stage {
 
     this.autoCam = true; this.shotIndex = 0; this.shotStartBar = 0; this.shotTime = 0; this.shotOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; this.shotPtr = 0;
     this.track = null; this.t = 0; this.textUntil = 0; this.dropBar = -100; this.lastProgPick = -100;
-    this.logo = { on: false, at: -1, len: 6, until: 0, since: 0, mode: 'wipe', g0: 0.5, last: -100, mirror: false };
+    this.logo = { on: false, at: -1, len: 6, until: 0, since: 0, mode: 'wipe', g0: 0.5, last: -100, mirror: false, image: false, overlayUntil: 0 };
     this.fx = { flameUntil: 0, sparkUntil: 0 };
     this.col = {};
-    this.o = { profile: null, track: null, logo: { reveal: 0, mode: 'wipe', glitch: 0 }, variant: 0, white: 0.5, kickHit: false, snareHit: false, hatHit: false };
+    this.o = { profile: null, track: null, logo: { reveal: 0, mode: 'wipe', glitch: 0, image: false }, variant: 0, white: 0.5, kickHit: false, snareHit: false, hatHit: false, logoImg: null, logoOverlay: 0 };
     this.tmpC = new THREE.Color(); this.tmpC2 = new THREE.Color(); this.tmpV = new THREE.Vector3(); this.tmpV2 = new THREE.Vector3();
     this.levels = new Float32Array(8);
     this.P = { t: 0, A: WHITE, B: WHITE, C: WHITE, bp: 0, pulse: 0, kick: 0, snare: 0, beatIdx: 0, dir: 1, level: 0, prog: 0, tick: 0, density: 0.05, barOdd: 0, spec: null, speed: 0.5, rep: 3, levels: this.levels };
     this.centreCtx = { A: WHITE, B: WHITE, C: WHITE, rng: null, gain: 1.6, strobes: 0.8, dt: 0.016 };
     this.headLoad = 0; this.bloomS = 0.4;
+    // rig density: user control (Lights button, - / = keys). Scales beam brightness, head duty and laser groups.
+    let dens = 0.7; try { const v = parseFloat(localStorage.getItem('vf.density')); if (v >= 0.3 && v <= 1.2) dens = v; } catch {}
+    this.density = dens;
     this.laserTick = 0; this.chaosTick = 0; this.laserPat = 'fan'; this.rigPat = 'breathe'; this.rigDir = 1; this.rigRep = 3; this.pattern = 'slowSweep'; this.patternB = 'slowSweep'; this.patPtr = {};
 
     this._buildWorld();
     this._buildStage();
     this._buildRig();
     this._buildPost();
+    this.setDensity(this.density);
     this.centre = null; this.centreKey = ''; this.allPanels = this.panels;
     this.setProfile(resolveProfile({ name: '', artist: '', id: '' }));
     this._bindCues();
@@ -292,16 +298,17 @@ export class Stage {
     // lasers
     const L = this.lasers = new LaserBank();
     let li = 0;
-    const laser = (x, y, z, beams, o) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: hash(li * 77 + 5) * 6.283 } }, o)); li++; };
-    for (let i = 0; i < 12; i++) laser(-27.5 + i * 5, 28.6, -7.5, 12, { pitch: -0.05 });
-    for (let i = 0; i < 8; i++) laser(-31.5 + i * 9, 26.2, 6.4, 10, { pitch: -0.08 });
+    // grp = duty-cycle group (see _driveLasers): only a rotating subset of groups fires at once so single fans stay readable
+    const laser = (x, y, z, beams, o, grp) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: hash(li * 77 + 5) * 6.283 } }, o)); li++; };
+    for (let i = 0; i < 12; i++) laser(-27.5 + i * 5, 28.6, -7.5, 12, { pitch: -0.05 }, 0);
+    for (let i = 0; i < 8; i++) laser(-31.5 + i * 9, 26.2, 6.4, 10, { pitch: -0.08 }, 1);
     for (const side of [-1, 1]) {
-      for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 10, { yaw: -side * 0.4 });
-      for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 8, { yaw: -side * 0.2, pitch: 0.05 });
-      for (const ox of [-2, 2]) laser(side * 34 + ox, 16.4, 51.5, 10, { yaw: Math.PI, pitch: 0.02 });
+      for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 10, { yaw: -side * 0.4 }, 2);
+      for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 8, { yaw: -side * 0.2, pitch: 0.05 }, 3);
+      for (const ox of [-2, 2]) laser(side * 34 + ox, 16.4, 51.5, 10, { yaw: Math.PI, pitch: 0.02 }, 4);
     }
-    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 12, { pitch: 0.35 });
-    for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }); }
+    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 12, { pitch: 0.35 }, 5);
+    for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 6); }
     L.sources.forEach((src, i) => { src.meta.u = i / (L.sources.length - 1); });
     s.add(L.build());
   }
@@ -328,6 +335,7 @@ export class Stage {
       wingsFollow: rng.chance(0.5),
       chaseDiv: rng.pick([2, 3, 4]),
       cutEvery: rng.pick([4, 4, 8]),
+      laserRank: rng.shuffle([0, 1, 2, 3, 4, 5, 6]), laserRot: rng.int(LASER_GROUPS),
       headSets: {},
     };
     for (const k in HEAD_SETS) this.song.headSets[k] = rng.shuffle(HEAD_SETS[k]);
@@ -344,6 +352,7 @@ export class Stage {
     this.allPanels = this.panels.concat(this.centre.panels);
     this.centreCtx.rng = rng; this.centreCtx.strobes = this.style.strobes ?? 0.8;
     this.o.profile = profile; this.o.variant = profile.variant | 0; this.o.white = this.style.white ?? 0.5;
+    this.o.logoImg = null; this.o.logoOverlay = 0; this.logo.overlayUntil = 0; this.logo.image = false;
     this.logo.mirror = rng.chance(0.6);
     this.pickPattern(true);
     this.pickProgram(true);
@@ -365,9 +374,16 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ logos
+  /** the artist's real logo (logos.js entry) once it has been fetched; null = procedural mark only */
+  setLogoImage(entry) {
+    this.o.logoImg = entry || null;
+    if (!entry) { this.o.logoOverlay = 0; this.logo.overlayUntil = 0; this.logo.image = false; }
+  }
   showLogo(len = 6, mode = null, glitch = 0.5) {
     const t = this.t, L = this.logo;
     L.on = true; L.since = t; L.until = t + len; L.last = t; L.g0 = glitch;
+    L.image = !!this.o.logoImg && this.rng.chance(0.85);
+    L.overlayUntil = 0;
     L.mode = mode || this.rng.pick(['wipe', 'scan', 'scale', 'flicker', 'build']);
     for (const p of this.allPanels) {
       const r = p.role;
@@ -386,10 +402,14 @@ export class Stage {
       } else {
         const age = t - L.since, left = L.until - t;
         o.reveal = clamp(Math.min(age / 1.2, left / 0.7), 0, 1);
-        o.mode = L.mode;
+        o.mode = L.mode; o.image = L.image;
         o.glitch = Math.max(0, 1 - age / 1.2) * L.g0 + (show.phase === 'drop' ? show.kick * 0.35 : 0);
       }
     }
+    // floating-logo window over content programs
+    const target = !L.on && this.o.logoImg && t < L.overlayUntil ? 1 : 0;
+    this.o.logoOverlay += (target - this.o.logoOverlay) * Math.min(1, (show.dt || 0.016) * (target ? 1.5 : 3));
+    if (this.o.logoOverlay < 0.01) this.o.logoOverlay = 0;
   }
 
   // ------------------------------------------------------------ cues
@@ -425,6 +445,7 @@ export class Stage {
       this.pickProgram(false);
       const rate = this.style.logoRate ?? 0.7;
       if (!this.logo.on && this.t - this.logo.last > 40 && sh.active && (sh.phase === 'breakdown' || sh.phase === 'peak') && this.rng.chance(rate * 0.45)) this.showLogo(sh.phase === 'peak' ? 4 : 7, null, 0.4);
+      else if (!this.logo.on && this.o.logoImg && sh.active && this.t >= this.logo.overlayUntil && (sh.phase === 'breakdown' || sh.phase === 'peak' || sh.phase === 'drop') && this.rng.chance(rate * 0.4)) this.logo.overlayUntil = this.t + this.rng.range(7, 14);
     });
     d.on('phase', (p) => {
       this.pickPattern(true);
@@ -477,8 +498,9 @@ export class Stage {
   _choose(pool, ph, prev) {
     const target = PANEL_ENERGY[ph] ?? 0.5;
     let entries = [];
-    const collect = (names, tol) => { for (const n of names) { if (!PROGRAMS[n] || n === 'logo' || n === 'text') continue; const e = PROGRAM_INFO[n]?.energy ?? 0.5, d = Math.abs(e - target); if (d < tol) entries.push([n, (tol + 0.02 - d) * (n === prev ? 0.2 : 1)]); } };
+    const collect = (names, tol, wt = 1) => { for (const n of names) { if (!PROGRAMS[n] || n === 'logo' || n === 'text') continue; if (PROGRAM_INFO[n]?.needsLogo && !this.o.logoImg) continue; const e = PROGRAM_INFO[n]?.energy ?? 0.5, d = Math.abs(e - target); if (d < tol) entries.push([n, (tol + 0.02 - d) * (n === prev ? 0.2 : 1) * wt]); } };
     collect(pool, 0.32);
+    if (this.o.logoImg && ph !== 'intro' && ph !== 'idle') collect(['logoTile', 'logoBurst'], 0.32, 0.7 * (this.style.logoRate ?? 0.7) + 0.2);
     if (entries.length < 2) collect(PROGRAM_NAMES, 0.25);
     if (!entries.length) return 'wash';
     return this.rng.weighted(entries);
@@ -541,6 +563,16 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ per-frame
+  // ---- rig density (user control). 0.3..1.2; persisted. Scales beam gain, head output, strobe punch and laser groups.
+  setDensity(v) {
+    this.density = clamp(+v || 0.7, 0.3, 1.2);
+    try { localStorage.setItem('vf.density', String(this.density)); } catch {}
+    this.heads.setGain(BEAM_GAIN * (0.7 + 0.3 * this.density));
+    return this.density;
+  }
+  densityLabel() { const d = this.density; return d < 0.55 ? 'low' : d < 0.85 ? 'med' : d <= 1.02 ? 'high' : 'max'; }
+  cycleDensity() { const i = DENSITY_PRESETS.findIndex(p => this.density < p[1] + 0.05); return this.setDensity(DENSITY_PRESETS[(i < 0 ? 0 : i + 1) % DENSITY_PRESETS.length][1]); }
+
   update(show, dt) {
     this.t = show.t;
     const col = colorsFrom(show, this.col);
@@ -575,21 +607,24 @@ export class Stage {
 
   _updateHeads(show, dt) {
     const H = this.heads, n = H.n, t = show.t, ph = show.phase, s = this.style, P = H.pos, G = H.goal, M = this.headMeta;
-    const bp = clamp(show.beatPhase, 0, 1), kick = show.kick, bo = show.blackout;
+    const bp = clamp(show.beatPhase, 0, 1), kick = show.kick, dip = show.dip || 0, dens = this.density;
     const base = (HEAD_BASE[ph] ?? 0.4) * (HI.has(ph) ? 1 : 1 - 0.5 * (s.dark ?? 0.35));
     const pulseAmt = HI.has(ph) ? 0.55 : ph === 'groove' ? 0.35 : 0.15;
     const buildBoost = ph === 'build' ? show.buildProgress * 0.45 : 0;
     const speed = HI.has(ph) ? 5 : ph === 'build' ? 3 : 1.6;
     if (show.beat && show.kickOn && (ph === 'drop' || (ph === 'peak' && (show.beatIndex & 1) === 0))) this.chaosTick++;
     const chaosSeed = this.chaosTick * 7919 + (this.profile.variant | 0);
-    const act = (show.active || ph === 'idle') && !bo ? 1 : 0;
+    const act = (show.active || ph === 'idle') ? 1 : 0;
     const A = show.colorA, B = show.colorB, mode = this.song.colorMode, div = this.song.chaseDiv;
     const swap = (show.barIndex + (ph === 'peak' && (show.beatIndex & 1) === 0 ? 1 : 0)) & 1;
     const sA = this.seedA, sB = this.seedB, sR = this.seedR;
     const ax = Math.sin(t * 0.5) * 20, ay = 18 + 10 * Math.sin(t * 0.4), az = 45 + Math.sin(t * 0.35) * 15;
     const cpx = Math.sin(t * 0.6) * 35, cpz = 30 + 25 * (0.5 + 0.5 * Math.sin(t * 0.45));
     const symSpread = 0.3 + 0.7 * (1 - bp);
-    const beams = s.beams ?? 1;
+    // output scale: artist taste x user density x pre-drop dip. In drop/peak one zone-group in three rests
+    // (rotating every two bars) so the rig breathes instead of every head firing at once.
+    const beams = (s.beams ?? 1) * (0.55 + 0.45 * dens) * (1 - 0.8 * dip);
+    const duty = HI.has(ph) && dens < 0.95, dutyBar = show.barIndex >> 1;
     let load = 0;
     for (let i = 0; i < n; i++) {
       const o = i * 3, px = P[o], py = P[o + 1], pz = P[o + 2], m = M[i], u = m.u, side = m.side, a = sA[i], b = sB[i], r = sR[i];
@@ -624,7 +659,7 @@ export class Stage {
       else if (ph === 'idle') inten *= 0.5 + 0.5 * Math.sin(t * 0.4 + i * 0.5);
       if (show.predrop) inten = 0.9;
       inten += show.whiteout * 0.6;
-      H.inten[i] = Math.min(1.1, inten) * beams * act;
+      H.inten[i] = Math.min(1.1, inten) * beams * act * (duty && (m.zone + dutyBar) % 3 === 0 ? 0.35 : 1);
       load += H.inten[i];
       let g;
       switch (mode) { case 'zone': g = m.zone & 1; break; case 'half': g = side < 0 ? 0 : 1; break; case 'chase': g = (Math.floor(u * div) + show.barIndex) & 1; break; default: g = i & 1; }
@@ -638,15 +673,16 @@ export class Stage {
   }
 
   _updateStrobes(show) {
-    const S = this.strobes, n = S.n, t = show.t, ph = show.phase, st = this.style.strobes ?? 0.8, bo = show.blackout, wo = show.whiteout;
+    const S = this.strobes, n = S.n, t = show.t, ph = show.phase, dip = show.dip || 0, wo = show.whiteout;
+    const st = (this.style.strobes ?? 0.8) * (0.75 + 0.25 * this.density) * (1 - dip);
     const flick = frac(t * Math.max(1, show.strobeRate)) < 0.5 ? 1 : 0;
     const full = show.strobe >= 0.99 ? flick : 0;
     const buildF = ph === 'build' && show.buildProgress > 0.55 ? flick * (show.buildProgress - 0.55) / 0.45 : 0;
     const kick = show.kick, snare = show.snare, hi = HI.has(ph), bi = show.beatIndex | 0;
     const bl = ph === 'drop' && show.dropPulse > 0.55 ? (show.dropPulse - 0.55) * 2.2 : (ph === 'peak' && show.barIndex % 8 === 7 && show.beatInBar >= 2 ? 0.7 * kick : 0);
-    const predropB = show.predrop && !bo ? 0.8 : 0;
+    const predropB = show.predrop ? 0.8 : 0;
     for (let i = 0; i < n; i++) {
-      if (bo || !show.active) { S.set(i, 0); continue; }
+      if (!show.active) { S.set(i, 0); continue; }
       const m = S.meta[i]; let lvl = 0;
       switch (m.zone) {
         case 'front': case 'back':
@@ -658,7 +694,7 @@ export class Stage {
         case 'deck': { const f = frac(m.u * 3 - t * 2); lvl = hi ? Math.max(full, kick * 0.9) : ph === 'groove' ? (f < 0.12 ? 0.35 : 0) : buildF; break; }
         case 'blinder': lvl = Math.max(bl, predropB); break;
       }
-      S.set(i, Math.min(1, lvl * st + wo * 1.2));
+      S.set(i, Math.min(1, lvl * st + wo * 1.2 * (1 - dip)));
     }
     S.commit();
   }
@@ -667,18 +703,25 @@ export class Stage {
 
   _driveLasers(bank, show, opMul) {
     const t = show.t, ph = show.phase, s = this.style, kick = show.kick, bp = clamp(show.beatPhase, 0, 1), pat = this.laserPat, lz = s.lasers ?? 0.6;
-    let op = 0;
-    if (ph === 'drop') op = 0.95; else if (ph === 'peak') op = 0.55 + 0.35 * show.beatPulse;
-    else if (ph === 'build') op = Math.max(0, show.buildProgress - 0.45) * 1.2 + (show.predrop ? 0.5 : 0);
-    else if (ph === 'groove' && this.song.grooveLasers) op = 0.22 + 0.3 * kick;
-    else if (ph === 'breakdown' && this.song.breakLasers) op = 0.18;
-    op *= lz * opMul;
-    if (show.blackout || show.whiteout > 0.6 || lz < 0.12 || !show.active) op = 0;
+    const dip = show.dip || 0, dens = this.density, bar = show.barIndex | 0, dt = show.dt || 0.016;
+    // Duty cycling: projectors are split into LASER_GROUPS groups and only a rotating window of them fires at once
+    // (window size follows the density setting), so single fans and the stage behind them stay readable.
+    const grpMax = dens < 0.55 ? 2 : dens < 0.85 ? 3 : dens <= 1.02 ? 4 : 5;
+    const rank = this.song.laserRank, rot = this.song.laserRot | 0;
+    let op = 0, win = -1, key = 0;   // win < 0 => all groups
+    if (ph === 'drop') { if (show.phaseBars < 2) op = 0.62; else { op = 0.78; win = grpMax; key = (bar >> 1) + rot; } }
+    else if (ph === 'peak') { op = 0.45 + 0.25 * show.beatPulse; win = grpMax; key = bar + rot; }
+    else if (ph === 'build') { const p = show.buildProgress; op = Math.max(0, p - 0.45) * 0.9 + (show.predrop ? 0.35 : 0); win = 1 + Math.floor(p * grpMax); key = rot; }
+    else if (ph === 'groove' && this.song.grooveLasers) { op = 0.16 + 0.22 * kick; win = 1; key = (bar >> 2) + rot; }
+    else if (ph === 'breakdown' && this.song.breakLasers) { op = 0.14; win = 1; key = (bar >> 2) + rot; }
+    op *= lz * opMul * Math.sqrt(dens) * (1 - dip);
+    if (show.whiteout > 0.6 || lz < 0.12 || !show.active) op = 0;
     const tick = this.laserTick, rainbow = !!s.rainbowLasers, classic = this.song.laserClassic, c = this.tmpC2;
-    const srcs = bank.sources, n = srcs.length;
+    const srcs = bank.sources, n = srcs.length, ease = Math.min(1, dt * 14);
     for (let i = 0; i < n; i++) {
       const L = srcs[i], m = L.meta || (L.meta = {}), u = m.u ?? (n > 1 ? i / (n - 1) : 0.5), side = m.side ?? (u < 0.5 ? -1 : 1), sd = m.seed ?? i;
-      if (m.yaw0 === undefined) { m.yaw0 = L.yaw; m.pitch0 = L.pitch; }
+      if (m.yaw0 === undefined) { m.yaw0 = L.yaw; m.pitch0 = L.pitch; m.opS = 0; }
+      const gOn = win < 0 || m.grp === undefined || ((rank[m.grp] + key) % LASER_GROUPS) < win;   // centre-piece lasers have no group: always in
       const base = m.yaw0, bpitch = m.pitch0;
       let yaw, pitch, spread, roll;
       switch (pat) {
@@ -692,18 +735,19 @@ export class Stage {
       }
       if (L.mode === 'cone') spread = Math.min(spread, 0.7);
       L.yaw = yaw; L.pitch = pitch; L.spread = spread; L.roll = roll;
-      L.op = op * (pat === 'kick' ? 0.5 + 0.5 * kick : 1);
+      m.opS += ((gOn ? op : 0) - m.opS) * ease;
+      L.op = m.opS * (pat === 'kick' ? 0.5 + 0.5 * kick : 1);
       if (rainbow) c.setHSL(frac(t * 0.08 + u * 0.6 + (i & 1) * 0.3), 1, 0.55);
       else if (classic) c.copy((i & 1) ? GREEN : show.colorA).lerp(WHITE, 0.05);
       else c.copy((i & 1) === 0 ? show.colorC : show.colorA).lerp(WHITE, 0.1);
-      c.multiplyScalar(1.3);
+      c.multiplyScalar(1.15);
       L.color.copy(c);
     }
     bank.update();
   }
 
   _updatePixels(show) {
-    const px = this.pixels, ph = show.active ? show.phase : 'idle', P = this.P, s = this.style, bo = show.blackout, wo = show.whiteout > 0.5;
+    const px = this.pixels, ph = show.active ? show.phase : 'idle', P = this.P, s = this.style, dip = show.dip || 0, wo = show.whiteout > 0.5;
     P.t = show.t; P.A = show.colorA; P.B = show.colorB; P.C = show.colorC;
     P.bp = clamp(show.beatPhase, 0, 1); P.pulse = show.beatPulse; P.kick = show.kick; P.snare = show.snare; P.beatIdx = show.beatIndex | 0;
     P.dir = this.rigDir; P.rep = this.rigRep; P.level = clamp(show.bass * 1.15 + show.beatPulse * 0.2, 0, 1); P.prog = clamp(show.buildProgress, 0, 1);
@@ -712,13 +756,12 @@ export class Stage {
     if (show.predrop && ph === 'build') fn = RIG_PAT.strobe;
     const hi = HI.has(ph);
     const gain = 1.3, kf = clamp(show.kick * 0.4 * (s.strobes ?? 0.8), 0, 0.45) * (hi ? 1 : 0.3);
-    const dim = (ph === 'idle' ? 0.5 : ph === 'breakdown' ? 0.7 : 1) * (hi ? 1 : 1 - 0.4 * (s.dark ?? 0.35));
+    const dim = (ph === 'idle' ? 0.5 : ph === 'breakdown' ? 0.7 : 1) * (hi ? 1 : 1 - 0.4 * (s.dark ?? 0.35)) * (1 - 0.85 * dip);
     for (const st of this.rigStrips) {
       const base = st.start;
       for (let i = 0; i < st.count; i++) {
         let k;
-        if (bo) { k = 0; pc.copy(WHITE); }
-        else if (wo) { k = 1; pc.copy(WHITE); }
+        if (wo) { k = 1; pc.copy(WHITE); }
         else { pc.copy(P.A); k = fn(st, i, P); if (kf > 0.02) { pc.lerp(WHITE, kf); k = Math.max(k, kf); } }
         px.setPixelC(base + i, pc, k * gain * dim);
       }
@@ -741,13 +784,13 @@ export class Stage {
   }
 
   _updateWorld(show, dt) {
-    const ph = show.phase, hi = HI.has(ph), bo = show.blackout;
+    const ph = show.phase, hi = HI.has(ph), dip = show.dip || 0;
     const base = ph === 'idle' ? 2 : ph === 'breakdown' ? 6 : 10;
-    const wi = bo ? 0 : base + 60 * show.bass * show.energy + 80 * show.strobe + 120 * show.whiteout;
+    const wi = (base + 60 * show.bass * show.energy + 80 * show.strobe + 120 * show.whiteout) * (1 - 0.7 * dip);
     const cols = [show.colorA, show.colorC, show.colorB];
     this.washLights.forEach((l, i) => { l.color.copy(cols[i]).lerp(WHITE, show.whiteout); l.intensity = wi; });
     this.stageLight.color.copy(show.colorB).lerp(WHITE, 0.5);
-    this.stageLight.intensity = bo ? 0 : 8 + 30 * show.bass;
+    this.stageLight.intensity = (8 + 30 * show.bass) * (1 - 0.6 * dip);
     this.crowd.mat.color.copy(show.colorA).multiplyScalar(0.05 + 0.08 * show.energy).add(this.tmpC.setRGB(0.03, 0.03, 0.05));
     // Bloom backs off as the rig fills up: hundreds of additive beams plus HDR strobe faces would
     // otherwise stack into a full-screen white haze during drops (dark phases keep the soft glow).

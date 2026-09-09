@@ -339,15 +339,14 @@ export class Centrepiece {
     P.speed = 0.35 + show.bpm / 240;
     let fn = PAT[this.pattern] || PAT.breathe;
     if (show.predrop > 0 && ph === 'build') fn = PAT.strobe;
-    const gain = ctx.gain ?? 1.6, bo = show.blackout, wo = show.whiteout > 0.5;
+    const gain = ctx.gain ?? 1.6, dip = show.dip || 0, wo = show.whiteout > 0.5;
     const kf = clamp(show.kick * 0.5 * (ctx.strobes ?? 0.8), 0, 0.6) * (ph === 'drop' || ph === 'peak' ? 1 : 0.3);
-    const dim = ph === 'idle' ? 0.5 : ph === 'breakdown' ? 0.7 : 1;
+    const dim = (ph === 'idle' ? 0.5 : ph === 'breakdown' ? 0.7 : 1) * (1 - 0.85 * dip);
     for (const s of this.strips) {
       const pix = s.part.pix, base = s.start;
       for (let i = 0; i < s.count; i++) {
         let k;
-        if (bo) { k = 0; out.c.copy(WHITE); }
-        else if (wo) { k = 1; out.c.copy(WHITE); }
+        if (wo) { k = 1; out.c.copy(WHITE); }
         else { out.c.copy(P.A); k = fn(s, i, P); if (kf > 0.02) { out.c.lerp(WHITE, kf); k = Math.max(k, kf); } }
         pix.setPixelC(base + i, out.c, k * gain * dim);
       }

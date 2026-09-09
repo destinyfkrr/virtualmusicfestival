@@ -39,11 +39,13 @@ export class Hud {
     this.$('btn-cam').onclick = () => stage.cycleCamera();
     this.$('btn-logo').onclick = () => stage.triggerLogo();
     this.$('btn-pyro').onclick = () => stage.triggerPyro();
+    this.$('btn-lights').onclick = () => { stage.cycleDensity(); this.flash('lights: ' + stage.densityLabel()); };
     for (const b of this.menu.querySelectorAll('[data-src]')) {
       b.onclick = async () => {
         try {
           const src = b.dataset.src;
           if (src === 'server') audio.useServer();
+          else if (src === 'demo') await audio.useDemo();
           else if (src === 'screen') await audio.useScreen();
           else if (src === 'device') await audio.useDevice(this.deviceSelect.value || undefined);
           this.menu.hidden = true;
@@ -89,7 +91,7 @@ export class Hud {
     if (!this.showLine || !p) return;
     const who = p.matched ? p.name : 'unlisted artist';
     const genre = GENRE_LABEL[p.genre] || p.genre;
-    this.showLine.textContent = `${who} · ${genre} · ${p.centre} rig · look #${p.variant}`;
+    this.showLine.textContent = `${who} · ${genre} · ${p.centre} rig · ${p.paletteMode || 'signature'} colours · look #${p.variant}`;
     this.showLine.classList.toggle('matched', !!p.matched);
   }
 

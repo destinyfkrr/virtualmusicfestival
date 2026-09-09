@@ -75,8 +75,8 @@ const beamFrag = /* glsl */`
     float rim = abs(dot(normalize(vN), normalize(vV)));
     float soft = pow(rim, 1.6);
     float haze = 0.88 + 0.12 * sin(along * 46.0 - time * 7.0);
-    float near = smoothstep(2.0, 14.0, vDist);
-    float a = fade * soft * haze * near * gain;
+    float near = smoothstep(5.0, 34.0, vDist);              // beams sweeping past the lens fade instead of washing the frame
+    float a = min(fade * soft * haze * near * gain, 0.5);
     gl_FragColor = vec4(vC * a, 1.0);
   }`;
 
@@ -89,8 +89,10 @@ function makeBeamGeo(r0 = 0.16, r1 = 3.4) {
 }
 
 /** Hundreds of moving heads in four draw calls. add() heads before build(); then drive goal/colour/intensity per head. */
+export const BEAM_GAIN = 0.13;
 export class BeamArray {
   constructor() { this.n = 0; this.items = []; }
+  setGain(g) { if (this.beamMat) this.beamMat.uniforms.gain.value = g; }
   /** meta is free-form (group, side, u, ...) and available later as this.meta[i] */
   add(pos, meta = {}) { this.items.push({ pos: pos.clone(), meta }); return this.n++; }
   build() {
@@ -115,7 +117,7 @@ export class BeamArray {
     this.lens.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.lens.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.beamMat = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 }, gain: { value: 0.17 } },
+      uniforms: { time: { value: 0 }, gain: { value: BEAM_GAIN } },
       vertexShader: beamVert, fragmentShader: beamFrag,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
     });
@@ -227,7 +229,7 @@ export class LaserBank {
       const D = _v.set(Math.sin(s.yaw) * cp, Math.sin(s.pitch), Math.cos(s.yaw) * cp);
       const R = _v2.set(Math.cos(s.yaw), 0, -Math.sin(s.yaw));
       const U = _v3.crossVectors(D, R).normalize();
-      const k = vis ? s.op * 1.8 : 0;
+      const k = vis ? s.op * 1.5 : 0;
       for (let i = 0; i < s.n; i++) {
         let a, th;
         if (s.mode === 'cone') { a = s.spread * 0.5; th = (i / s.n) * Math.PI * 2 + s.roll; }

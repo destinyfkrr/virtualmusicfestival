@@ -2,8 +2,9 @@ import { AudioEngine } from './audio.js';
 import { ShowDirector } from './director.js';
 import { Stage } from './stage.js';
 import { Hud } from './hud.js';
-import { paletteFromArt } from './palette.js';
+import { paletteFromArt, mergeArtPalette } from './palette.js';
 import { resolveProfile } from './artists.js';
+import { loadLogo, primaryArtist } from './logos.js';
 
 const canvas = document.getElementById('stage');
 const audio = new AudioEngine();
@@ -26,8 +27,12 @@ audio.onTrack = (t) => {
     director.resetTrack();
     stage.setProfile(profile);
     hud.setProfile(profile);
+    // the real logo (server-resolved + cached) replaces the procedural mark on the walls once it is in
+    stage.setLogoImage(null);
+    const who = primaryArtist(t.artist);
+    if (who) loadLogo(who).then((e) => { if (e && lastTrackId === t.id) stage.setLogoImage(e); });
     if (t.art && profile.style.artColors !== false) {
-      paletteFromArt(t.art).then((pal) => { if (pal && lastTrackId === t.id) director.setPalette(pal); }).catch(() => {});
+      paletteFromArt(t.art).then((pal) => { if (pal && lastTrackId === t.id) director.setPalette(mergeArtPalette(profile.palette, pal, profile.seed)); }).catch(() => {});
     }
   }
   stage.setTrack(t);
@@ -38,6 +43,8 @@ const enter = document.getElementById('enter');
 document.getElementById('enter-btn').onclick = async () => {
   enter.classList.add('hide');
   try { await audio.start(); } catch (e) { console.error(e); alert('Audio start failed: ' + (e.message || e)); }
+  const q = new URLSearchParams(location.search);
+  if (q.has('demo')) { try { await audio.useDemo(q.get('demo') || undefined); } catch (e) { console.error(e); } }
   hud.refreshStatus();
 };
 
@@ -51,6 +58,7 @@ addEventListener('keydown', (e) => {
   else if (k === 's') hud.openMenu();
   else if (k === 'l') stage.triggerLogo();
   else if (k === 'p') stage.triggerPyro();
+  else if (k === '-' || k === '=' || k === '+') { stage.setDensity(stage.density + (k === '-' ? -0.1 : 0.1)); hud.flash(`lights ${stage.densityLabel()} (${Math.round(stage.density * 100)}%)`); }
   else if (k === 'd') { director.forceDrop(); hud.flash('drop on next beat'); }
   else if (k === '[' || k === ']') {
     const lead = director.setLead(director.nudge + (k === '[' ? -0.01 : 0.01));
