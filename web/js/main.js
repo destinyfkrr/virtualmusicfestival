@@ -65,7 +65,6 @@ addEventListener('keydown', (e) => {
     hud.flash(`sync lead ${Math.round(lead * 1000)} ms (${director.nudge >= 0 ? '+' : ''}${Math.round(director.nudge * 1000)})`);
   }
   else if (k.length === 1 && k >= '0' && k <= '9') { stage.setShot(k === '0' ? 9 : Number(k) - 1); hud.flash('camera ' + k); }
-  else if (k === 'q' || k === 'w' || k === 'e') { const i = { q: 10, w: 11, e: 12 }[k]; stage.setShot(i); hud.flash(['festival wide', 'ferris wheel', 'in the crowd'][i - 10]); }
   else if (k === 'escape') document.getElementById('source-menu').hidden = true;
 });
 addEventListener('resize', () => stage.resize());

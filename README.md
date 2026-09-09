@@ -49,10 +49,9 @@ Press **S** (or the *Source* button):
 | --- | --- |
 | F | Fullscreen |
 | C | Cut to the next camera shot (auto-cam resumes ~25 s after you drag) |
-| 1–9, 0 | Camera 1–10: wide, crowd L, crowd R, side, close, low, orbit, crowd POV, top, DJ POV |
-| Q / W / E | Festival cameras: walk in through the entrance gate, crane from the ferris wheel to the stage, in the crowd |
+| 1–9, 0 | Camera 1–10, all framed on the stage: wide, front L, front R, side, close, low, arc, raking, top, centrepiece |
 | L | Show the artist's logo / mark on the walls now |
-| P | Fire pyro (CO2, flames, sparkulars, fireworks, confetti, water) |
+| P | Fire pyro (CO2 jets, flames, cold-spark fountains) |
 | D | Force a drop on the next beat |
 | - / = | Fewer / more beams and lasers (the *Lights* button cycles low → med → high) |
 | [ / ] | Nudge sync lead −/+10 ms (if hits feel late/early) |
@@ -102,11 +101,18 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
 - `web/js/fixtures.js` — GPU-instanced fixture arrays: `BeamArray` (moving heads with
   volumetric beams), `StrobeArray`, `LaserBank`, `PixelStrips`, `LedPanel`, `Crowd`,
   `Particles`.
-- `web/js/stage.js` — the set, built 2x life size: ~310 moving heads, ~165 strobes/blinders,
-  47 laser sources (~360 beams), thousands of architectural pixels (arches, trusses, towers,
+- `web/js/stage.js` — the set, built 4x life size: ~210 moving heads, ~165 strobes/blinders,
+  31 laser sources (~235 beams), thousands of architectural pixels (arches, trusses, towers,
   frames, runway) plus the centrepiece, the 18k crowd with phone lights, bloom, and the
-  camera director (13 shots, drop cuts on the downbeat). Nothing stands in the crowd: no FOH
-  platform or delay towers, so every shot from the field sees the whole stage. The *Lights* density scales
+  camera director (10 shots, drop cuts on the downbeat). Every shot frames the stage: there is
+  no crowd-only, gate or DJ-point-of-view camera, the grounds are only ever the backdrop.
+  Nothing stands in the crowd: no FOH
+  platform or delay towers, so every shot from the field sees the whole stage. The rig is deliberately a
+  third smaller than this project's first cut: the beams and fans frame the stage, the
+  screens and the centrepiece instead of replacing them. The air in front of the stage is kept
+  clear as well: pyro is CO2, flames and cold sparks on the drop only, and there is no confetti,
+  no fireworks, no water curtain and no haze sprite floating over the field, so nothing hangs
+  between the camera and the set. The *Lights* density scales
   how many beams and lasers are up at once and how bright they are, so the stage always stays visible.
   Lasers are run the way a laser operator runs them: the projectors on one truss share a
   look (mirrored fans, one phase running along the truss) and only one to three of the six

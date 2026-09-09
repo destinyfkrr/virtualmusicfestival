@@ -1,6 +1,6 @@
 // Virtual-Fest — the virtual main stage.
-//  - set geometry (deck, booth, LED walls, trusses, towers), built 2x life size around a human-scale crowd
-//  - fixture rigs: ~310 moving heads, ~165 strobes/blinders, ~47 laser sources (~360 beams),
+//  - set geometry (deck, booth, LED walls, trusses, towers), built 4x life size around a human-scale crowd
+//  - fixture rigs: ~210 moving heads, ~165 strobes/blinders, 31 laser sources (~235 beams),
 //    ~3.8k rig pixels + the artist centrepiece (another 0.5–1.5k pixels, kinetic parts, holo screens)
 //  - cue handling from the director (drops, bars, phrases, phases, pyro, logos)
 //  - per-song look (seeded from the track) so no two songs run the same show
@@ -27,9 +27,9 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const smooth = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
 const hash = (n) => { let x = Math.imul(n | 0, 374761393); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const HI = new Set(['drop', 'peak']);
-const SHOTS = 13;
-const DROP_SHOTS = [0, 3, 5, 8, 4, 12];
-const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const SHOTS = 10;   // every shot frames the stage (see Stage._updateCamera)
+const DROP_SHOTS = [0, 3, 5, 8, 4, 9];
+const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 // Auto-iris (IrisPass / Stage._readIris / _updateWorld): highlight-priority auto exposure, like a broadcast camera's
 // iris. The composer's HDR buffer (scene + bloom, before tone mapping) is metered into 16x9 cells: each cell is the
 // mean of 64 taps of luminance clamped at IRIS_RANGE, so a beam at 40x counts the same as one at 2x and the meter
@@ -69,9 +69,9 @@ const _lzA = new THREE.Color(), _lzC = new THREE.Color();
 const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
 const LASER_GROUPS = 6; // back truss, front truss, towers, wings, deck, arch cones
 // The set, rig, centrepiece and grounds are authored in "site" units and live in a group scaled WORLD_SCALE times, so the
-// stage stands 2x life size; the crowd is built at 1/WORLD_SCALE inside it so people stay human. The camera and lights
+// stage stands 4x life size; the crowd is built at 1/WORLD_SCALE inside it so people stay human. The camera and lights
 // work in world units, hence the point-light compensation (three.js point lights fall off as 1/d^decay, decay 1.8).
-const WORLD_SCALE = 2;
+const WORLD_SCALE = 4;
 const LIGHT_K = Math.pow(WORLD_SCALE, 1.8);
 const DENSITY_PRESETS = [['low', 0.45], ['med', 0.7], ['high', 1.0]];
 const HEAD_SETS = {
@@ -143,21 +143,21 @@ export class Stage {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x020209);
     this.scene.fog = new THREE.FogExp2(0x04040c, 0.0045 / WORLD_SCALE);
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 2000);
-    this.camera.position.set(0, 32, 190);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 750 * WORLD_SCALE);   // far: the sky dome (640 site units) must fit
+    this.camera.position.set(0, 18 * WORLD_SCALE, 70 * WORLD_SCALE);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
-    this.controls.target.set(0, 20, -10);
+    this.controls.target.set(0, 13 * WORLD_SCALE, -6 * WORLD_SCALE);
     this.controls.maxPolarAngle = Math.PI * 0.52;
-    this.controls.minDistance = 16;
-    this.controls.maxDistance = 440;
+    this.controls.minDistance = 8 * WORLD_SCALE;
+    this.controls.maxDistance = 220 * WORLD_SCALE;
     this.manualUntil = 0;
     this.controls.addEventListener('start', () => { this.manualUntil = performance.now() + 25000; });
 
     this.autoCam = true; this.shotIndex = 0; this.shotStartBar = 0; this.shotTime = 0; this.shotOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; this.shotPtr = 0;
     this.track = null; this.t = 0; this.textUntil = 0; this.dropBar = -100; this.lastProgPick = -100;
     this.logo = { on: false, at: -1, len: 6, until: 0, since: 0, mode: 'wipe', g0: 0.5, last: -100, mirror: false, image: false, overlayUntil: 0 };
-    this.fx = { flameUntil: 0, sparkUntil: 0, waterUntil: 0, fallUntil: 0 };
+    this.fx = { flameUntil: 0, sparkUntil: 0 };
     this.col = {};
     this.o = { profile: null, track: null, logo: { reveal: 0, mode: 'wipe', glitch: 0, image: false }, variant: 0, white: 0.5, kickHit: false, snareHit: false, hatHit: false, logoImg: null, logoOverlay: 0 };
     this.tmpC = new THREE.Color(); this.tmpC2 = new THREE.Color(); this.tmpV = new THREE.Vector3(); this.tmpV2 = new THREE.Vector3();
@@ -576,9 +576,9 @@ export class Stage {
     const sh = this.director.show, rng = this.rng;
     let next;
     if (reason === 'drop') next = rng.pick(DROP_SHOTS);
-    else if (reason === 'build') next = rng.pick([5, 4, 0, 8, 10]);
-    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9, 10, 11]);
-    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 12, 10]);
+    else if (reason === 'build') next = rng.pick([5, 4, 0, 8, 7]);
+    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9]);
+    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 7]);
     else next = this.shotOrder[this.shotPtr++ % this.shotOrder.length];
     if (next === this.shotIndex) next = (next + 1) % SHOTS;
     this.shotIndex = next; this.shotStartBar = sh.barIndex; this.shotTime = 0; this.iris.snapIn = 4;
@@ -589,27 +589,26 @@ export class Stage {
   _updateCamera(dt, show) {
     if (performance.now() < this.manualUntil) { this.controls.update(); return; }
     this.shotTime += dt;
-    const t = this.shotTime, T = Math.min(1, t / 14), v = this.tmpV, look = this.tmpV2.set(0, 22, -12);
-    const fov = this.shotIndex === 10 ? 68 : 55;
-    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
-    // World units: the site is WORLD_SCALE x its authored coordinates, so the framing shots sit twice as far out as the
-    // stage they frame; the eye-level shots (1, 2, 7, 12) stay at human head height in the crowd.
+    const t = this.shotTime, T = Math.min(1, t / 14), v = this.tmpV, look = this.tmpV2.set(0, 13, -6);
+    // Every shot stays on the stage. The paths are authored in site units (the set's own coordinates: 96 wide, 36 high,
+    // front edge at z 2) and scaled to world units below, so they frame the set at any WORLD_SCALE; `eye` overrides the
+    // camera height with a human head height in world units for the shots that stand at the front of the crowd.
+    let eye = 0;
     switch (this.shotIndex) {
-      case 0: v.set(Math.sin(t * 0.1) * 12, 32 - 6 * T, 200 - 44 * T); break;
-      case 1: v.set(-68 + 28 * T, 3.2, 116 - 24 * T); look.set(8, 28, -12); break;
-      case 2: v.set(68 - 28 * T, 3.2, 116 - 24 * T); look.set(-8, 28, -12); break;
-      case 3: v.set(116 - 20 * T, 40 - 8 * T, 96 - 28 * T); look.set(0, 24, -12); break;
-      case 4: v.set(Math.sin(t * 0.3) * 6, 12 + 2 * T, 48 - 10 * T); look.set(0, 18, -18); break;
-      case 5: v.set(0, 5 + 3 * T, 124 - 20 * T); look.set(0, 56 - 16 * T, -20); break;
-      case 6: { const a = t * 0.08 + Math.PI / 2; v.set(Math.cos(a) * 150, 44, 80 + Math.sin(a) * 80); look.set(0, 24, -12); break; }
-      case 7: v.set(-24 + 48 * Math.abs(Math.sin(t * 0.05)), 2.2 + 0.15 * Math.sin(t * 1.7), 84 - 12 * T); look.set(Math.sin(t * 0.4) * 6, 28, -12); break;
-      case 8: v.set(Math.sin(t * 0.15) * 20, 84 - 12 * T, 68 - 16 * T); look.set(0, 16, -16); break;
-      case 9: v.set(0, 13.1, -2.8); look.set(Math.sin(t * 0.2) * 28, 12 + Math.sin(t * 0.13) * 6, 120); break;
-      case 10: v.set(Math.sin(t * 0.6) * 1.2, 9 + 2 * T + 0.12 * Math.sin(t * 2.1), 392 - 60 * T); look.set(0, 30, 0); break;   // walking in through the entrance gate (wide lens)
-      case 11: { const s = smooth(0.3, 0.8, T); v.set(-156 + 60 * T, 40 + 8 * T, 236 - 80 * T); look.set(-216 + 216 * s, 60 - 30 * s, 156 - 156 * s); break; }   // crane: hold on the ferris wheel, pan to the stage
-      case 12: v.set(28 - 8 * T, 2.6 + 0.2 * Math.sin(t * 1.9), 68 - 12 * T); look.set(-8 + 8 * T, 26, -12); break;      // low in the crowd
-      default: v.set(0, 32, 190);
+      case 0: v.set(Math.sin(t * 0.1) * 6, 18 - 3 * T, 70 - 16 * T); break;                                                    // wide front, slow push-in
+      case 1: v.set(-30 + 12 * T, 0, 50 - 10 * T); look.set(3, 13, -6); eye = 3.2 + 0.1 * Math.sin(t * 1.7); break;             // front left, eye level
+      case 2: v.set(30 - 12 * T, 0, 50 - 10 * T); look.set(-3, 13, -6); eye = 3.2 + 0.1 * Math.sin(t * 1.7); break;             // front right, eye level
+      case 3: v.set(50 - 10 * T, 19 - 4 * T, 40 - 12 * T); look.set(0, 12, -6); break;                                           // side, high
+      case 4: v.set(Math.sin(t * 0.3) * 3, 6 + T, 24 - 5 * T); look.set(0, 9, -9); break;                                        // close on the booth and the main screen
+      case 5: v.set(0, 0, 56 - 10 * T); look.set(0, 26 - 8 * T, -10); eye = 4 + 6 * T; break;                                    // low front, tilting down from the rig
+      case 6: { const a = Math.PI / 2 + Math.sin(t * 0.07); v.set(Math.cos(a) * 62, 22, 36 + Math.sin(a) * 34); look.set(0, 12, -6); break; }   // slow arc across the front
+      case 7: v.set(-34 + 6 * T, 8 + 2 * T, 30 - 6 * T); look.set(4 - 4 * T, 13, -8); break;                                    // raking along the stage face
+      case 8: v.set(Math.sin(t * 0.15) * 10, 42 - 6 * T, 34 - 8 * T); look.set(0, 8, -8); break;                                 // top-down over the roof
+      case 9: v.set(Math.sin(t * 0.2) * 2, 14 - T, 30 - 14 * T); look.set(0, 13.5, -10); break;                                  // centrepiece push-in
+      default: v.set(0, 18, 70);
     }
+    v.multiplyScalar(WORLD_SCALE); look.multiplyScalar(WORLD_SCALE);
+    if (eye) v.y = eye;
     v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04);
     const k = 1 - Math.exp(-dt * (t < 0.05 ? 100 : 2.5));
     this.camera.position.lerp(v, k);

@@ -358,7 +358,7 @@ const crowdMove = /* glsl */`
 `;
 export class Crowd {
   constructor(count = 18000, bodyScale = 0.5) {
-    this.count = count; this.bodyScale = bodyScale;   // bodyScale: the crowd sits inside the 2x stage group, so people are built at half size to stay human
+    this.count = count; this.bodyScale = bodyScale;   // bodyScale: the crowd sits inside the scaled-up stage group, so people are built at 1/WORLD_SCALE to stay human
     this.uT = { value: 0 }; this.uJump = { value: 0 }; this.uBounce = { value: 0 }; this.uBar = { value: 0 }; this.uWave = { value: 0 }; this.uPhone = { value: 0 };
     const geo = new THREE.CapsuleGeometry(0.32, 1.1, 2, 6);
     geo.translate(0, 0.9, 0);
@@ -373,7 +373,7 @@ export class Crowd {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     let i = 0;
     while (i < count) {
-      const z = 9 + Math.pow(Math.random(), 0.85) * 110;
+      const z = 9 + Math.pow(Math.random(), 1.7) * 110;   // front-heavy, like a real field (the cameras only ever see the front half)
       const halfW = 22 + z * 0.55;
       const x = (Math.random() * 2 - 1) * halfW;
       if (Math.abs(x) < 6 && z < 12) continue; // gap at the barrier

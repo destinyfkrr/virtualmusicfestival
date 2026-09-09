@@ -7,7 +7,7 @@
 //   Wristbands   LED wristbands on half the crowd: waves, chases, kick flashes, drop whiteouts
 //   Festoons     catenary bulb strings + bunting across the field
 //   Gate         entrance arch at the back of the field with a VIRTUAL-FEST sign
-//   Dressing     PA hangs, sub stacks, rails, stairs, DJ gear (human scale inside the 2x set), food stalls
+//   Dressing     PA hangs, sub stacks, rails, stairs, DJ gear (human scale inside the big set), food stalls
 // All of it is instanced or shader-driven; the per-frame CPU work is a few thousand colour writes.
 import * as THREE from 'three';
 import { V3, BEAM_GAIN, BeamArray, PixelStrips, pathLine, pathCircle } from './fixtures.js';
@@ -506,7 +506,7 @@ export class Gate {
 
 // ---------------------------------------------------------------- stage dressing + village
 export class Dressing {
-  constructor(mainMat, px) {
+  constructor(mainMat, px, human = 0.5) {
     this.group = new THREE.Group();
     const truss = new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 0.5, metalness: 0.8 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.8, metalness: 0.3 });
@@ -531,17 +531,18 @@ export class Dressing {
       for (let x = 8; x <= 28; x += 2) box(0.08, 0.6, 0.08, side * x, 2.5, 5.3, truss);
     }
     box(56, 0.3, 0.5, 0, 0.15, 5.4, black);
-    // DJ gear on the riser - human scale (the site is built 2x life size, so a 0.9 m-high table is 0.45 here)
-    const RY = 5.6, screenMat = new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false });
-    box(2.6, 0.45, 0.75, 0, RY + 0.225, -1.3, black);                                                 // plinth
-    for (const x of [-0.85, 0.85]) box(0.45, 0.08, 0.35, x, RY + 0.49, -1.3, dark);                    // CDJs
-    box(0.55, 0.07, 0.35, 0, RY + 0.485, -1.3, dark);                                                 // mixer
-    box(0.45, 0.28, 0.03, 0, RY + 0.72, -1.6, screenMat);                                             // laptop screen
+    // DJ gear on the riser, sized in metres times `human` (the crowd's body scale, 1/WORLD_SCALE) so the table, players
+    // and wedges stay human size on a set built several times life size
+    const RY = 5.6, ZG = -1.3, h = human, screenMat = new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false });
+    box(5.2 * h, 0.9 * h, 1.5 * h, 0, RY + 0.45 * h, ZG, black);                                                   // plinth
+    for (const x of [-1.7 * h, 1.7 * h]) box(0.9 * h, 0.16 * h, 0.7 * h, x, RY + 0.98 * h, ZG, dark);              // CDJs
+    box(1.1 * h, 0.14 * h, 0.7 * h, 0, RY + 0.97 * h, ZG, dark);                                                   // mixer
+    box(0.9 * h, 0.56 * h, 0.06 * h, 0, RY + 1.44 * h, ZG - 0.6 * h, screenMat);                                   // laptop screen
     this.jogs = [];
-    for (const x of [-0.85, 0.85]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.12, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x, RY + 0.535, -1.25); this.group.add(jog); this.jogs.push(jog); }
-    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.22, RY + 0.53, -1.33), V3(0.22, RY + 0.53, -1.33), 10), 0.03, { zone: 'mixer' });
-    for (const x of [-1.6, 1.6]) box(0.6, 0.4, 0.5, x, RY + 0.2, -0.6, black, x < 0 ? 0.5 : -0.5);    // monitor wedges
-    box(3, 0.03, 1.4, 0, RY + 0.015, -1.2, new THREE.MeshBasicMaterial({ color: 0x101018 }));         // riser mat
+    for (const x of [-1.7 * h, 1.7 * h]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.14 * h, 0.24 * h, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x, RY + 1.07 * h, ZG + 0.1 * h); this.group.add(jog); this.jogs.push(jog); }
+    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.44 * h, RY + 1.06 * h, ZG - 0.06 * h), V3(0.44 * h, RY + 1.06 * h, ZG - 0.06 * h), 10), 0.06 * h, { zone: 'mixer' });
+    for (const x of [-3.2 * h, 3.2 * h]) box(1.2 * h, 0.8 * h, 1.0 * h, x, RY + 0.4 * h, ZG + 1.4 * h, black, x < 0 ? 0.5 : -0.5);   // monitor wedges
+    box(6 * h, 0.06 * h, 2.8 * h, 0, RY + 0.03 * h, ZG + 0.2 * h, new THREE.MeshBasicMaterial({ color: 0x101018 }));   // riser mat
     // food / merch village along both sides of the field
     const nStalls = 26;
     const body = new THREE.InstancedMesh(new THREE.BoxGeometry(5, 2.6, 4), dark, nStalls);
@@ -626,7 +627,7 @@ export class Festival {
     this.bands = new Wristbands(crowd, 0.5); scene.add(this.bands.mesh);
     this.festoons = new Festoons(this.px); scene.add(this.festoons.group);
     this.gate = new Gate(this.px, 128); scene.add(this.gate.group);
-    this.dress = new Dressing(mainMat, this.px); scene.add(this.dress.group);
+    this.dress = new Dressing(mainMat, this.px, crowd.bodyScale ?? 1); scene.add(this.dress.group);
     this.ground = new GroundGlow(); scene.add(this.ground.mesh);
     // entrance path beyond the gate: bollard lights + lamp posts
     const bol = []; for (let z = 132; z <= 196; z += 6) for (const x of [-8.5, 8.5]) bol.push(V3(x, 0.8, z));
