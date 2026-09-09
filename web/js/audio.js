@@ -1,5 +1,5 @@
 // AudioEngine: owns the AudioContext + AnalyserNode and the audio source
-// (native Spotify tap over WebSocket, an input device, or screen-share audio).
+// (native Spotify tap over WebSocket, an input device, screen-share audio, or the built-in demo set).
 // Produces per-frame spectral features for the ShowDirector.
 
 const BANDS = {
@@ -46,6 +46,7 @@ export class AudioEngine {
       if (this.tapState === 'unavailable') return { level: 'bad', text: 'tap unavailable' };
       return { level: 'warn', text: 'tap ' + this.tapState };
     }
+    if (this.sourceKind === 'demo') return { level: 'live', text: 'live · demo set' };
     return { level: 'live', text: 'live · ' + (this.sourceKind === 'screen' ? 'screen audio' : 'input device') };
   }
 
@@ -58,7 +59,7 @@ export class AudioEngine {
     if (this.ctx && this.ctx.sampleRate === rate) { if (this.ctx.state !== 'running') await this.ctx.resume(); return; }
     if (this.ctx) { try { await this.ctx.close(); } catch {} }
     const ctx = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
-    this.ctx = ctx;
+    this.ctx = ctx; this.demoMon = null;
     await ctx.audioWorklet.addModule('js/pcm-worklet.js');
     await ctx.audioWorklet.addModule('js/analysis-worklet.js');
     this.analyser = ctx.createAnalyser();
@@ -74,6 +75,7 @@ export class AudioEngine {
     this.feeder = new AudioWorkletNode(ctx, 'pcm-feeder', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
     this.currentSource = null;
     if (this.sourceKind === 'server') this.useServer();
+    else if (this.sourceKind === 'demo') { const a = this.demo?.artist; if (this.demo) { this.demo.stop(); this.demo = null; } await this.useDemo(a); }
     else if (this.currentStream) this._attachStream(this.currentStream);
     if (ctx.state !== 'running') await ctx.resume();
   }
@@ -81,6 +83,25 @@ export class AudioEngine {
   _detach() {
     if (this.currentSource) { try { this.currentSource.disconnect(); } catch {} }
     this.currentSource = null;
+    if (this.demoTimer) { clearInterval(this.demoTimer); this.demoTimer = 0; }
+    if (this.demo) { this.demo.stop(); this.demo = null; }
+  }
+
+  /** built-in synthesised set (no Spotify needed); audible through the speakers at demoVolume */
+  async useDemo(artist) {
+    const { DemoTrack } = await import('./demo.js');
+    this._detach(); this._stopStream();
+    this.sourceKind = 'demo';
+    const d = this.demo = new DemoTrack(this.ctx, artist || 'Martin Garrix');
+    d.out.connect(this.onsetTap);
+    if (!this.demoMon) { this.demoMon = this.ctx.createGain(); this.demoMon.connect(this.ctx.destination); }
+    this.demoMon.gain.value = this.demoVolume ?? 0.5;
+    d.out.connect(this.demoMon);
+    d.start();
+    this.currentSource = d.out;
+    this.onStatus?.();
+    const tick = () => { if (!this.demo) return; const m = this.demo.track(); this.track = m; this.onTrack?.(m); };
+    tick(); this.demoTimer = setInterval(tick, 500);
   }
   _stopStream() {
     if (this.currentStream) { for (const t of this.currentStream.getTracks()) t.stop(); }
@@ -147,7 +168,7 @@ export class AudioEngine {
         } else if (m.type === 'tap') {
           this.tapState = m.state; this.onStatus?.();
         } else if (m.type === 'track') {
-          this.track = m; this.onTrack?.(m);
+          if (this.sourceKind !== 'demo') { this.track = m; this.onTrack?.(m); }
         }
         return;
       }
@@ -163,7 +184,7 @@ export class AudioEngine {
   /** audio-clock time in seconds (what the onset tap timestamps are measured against) */
   now() { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; }
   /** how far the analysed audio is behind what the speakers play, in seconds (source dependent) */
-  baseLatency() { return this.sourceKind === 'server' ? 0.075 : 0.035; }
+  baseLatency() { return this.sourceKind === 'server' ? 0.075 : this.sourceKind === 'demo' ? 0.02 : 0.035; }
 
   analyse() {
     const f = this.features;
