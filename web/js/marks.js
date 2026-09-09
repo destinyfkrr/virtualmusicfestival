@@ -62,8 +62,24 @@ function text(c, o, str, { cx = 0, cy = 0, maxW = 1.8, maxH = 0.5, weight = '900
   c.restore();
 }
 
+// real logo (see logos.js) fitted into the panel; drawn tinted with the current mark colour, photo-like
+// kinds (clearart / cutouts) as they are. o.logoScale scales the fit.
+export function imageRect(e, aw, ah, k = 1) {
+  const kk = e.scale * k;
+  let dw = aw * 0.92 * kk, dh = dw / e.aspect;
+  if (dh > ah * 0.9 * kk) { dh = ah * 0.9 * kk; dw = dh * e.aspect; }
+  return [-dw / 2, -dh / 2, dw, dh];
+}
+
 // ------------------------------------------------------------------ mark library
 export const MARKS = {
+  image(c, o) {
+    const e = o.logoImg;
+    if (!e) return MARKS.text(c, o);
+    const [x, y, dw, dh] = imageRect(e, o.aw, 1, o.logoScale || 1);
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.drawImage(e.tint(c.fillStyle), x, y, dw, dh);
+  },
   text(c, o) { text(c, o, o.text || '', { maxW: o.aw * 0.92, maxH: 0.56 }); },
 
   plusx(c, o) { plus(c, -0.36, 0, 0.26, 0.12); cross(c, 0.36, 0, 0.28, 0.12); },

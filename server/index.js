@@ -3,6 +3,7 @@
 //  - supervises the native Spotify audio tap and streams raw Float32 PCM over WebSocket
 //  - polls Spotify (AppleScript) for now-playing metadata
 //  - proxies album artwork so the browser can read pixels for palette extraction
+//  - fetches + caches real artist logos (TheAudioDB / Wikidata / Commons) for the LED screens
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -10,6 +11,7 @@ import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { createLogoHandler } from './logos.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -20,6 +22,8 @@ const TAP_BUILD = path.join(ROOT, 'native', 'build.sh');
 const SCRIPT = path.join(__dirname, 'spotify.applescript');
 const PORT = Number(process.env.PORT || 5173);
 const POLL_MS = 400;
+const LOGO_CACHE = path.join(ROOT, 'cache', 'logos');
+const handleLogo = createLogoHandler(LOGO_CACHE);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -65,6 +69,7 @@ async function proxyArt(req, res, url) {
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
   if (u.pathname === '/art') return proxyArt(req, res, u.searchParams.get('url') || '');
+  if (u.pathname === '/logo') return handleLogo(req, res, u.searchParams.get('artist') || '', u.searchParams.has('meta'));
   if (u.pathname === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size }));
