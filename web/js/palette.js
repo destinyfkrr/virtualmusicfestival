@@ -1,5 +1,6 @@
-// Extracts a vivid 3-colour lighting palette from album artwork.
+// Extracts a vivid 3-colour lighting palette from album artwork, and merges it into the song's show palette.
 import * as THREE from 'three';
+import { hexToHsl, hueDist, isNeutral } from './colors.js';
 
 export async function paletteFromArt(url) {
   const img = await new Promise((resolve, reject) => {
@@ -38,6 +39,22 @@ export async function paletteFromArt(url) {
   }
   if (!hues.length) return null;
   if (hues.length === 1) hues.push((hues[0] + 0.5) % 1);
-  hues.push((hues[0] + 0.3 + Math.random() * 0.08) % 1);
+  let hash = 0; for (let i = 0; i < url.length; i++) hash = (hash * 31 + url.charCodeAt(i)) >>> 0;
+  hues.push((hues[0] + 0.3 + (hash % 1000) / 1000 * 0.08) % 1); // deterministic per artwork
   return hues.map(h => '#' + new THREE.Color().setHSL(h, 0.95, 0.55).getHexString());
+}
+
+// Album art tints the show; it doesn't replace the artist's colours. Keeps the show palette's two lead
+// colours, adds up to two artwork hues that aren't already represented (>25 degrees from every lead hue),
+// then tops up from the remaining show colours. One song in three leads with the artwork colours instead.
+export function mergeArtPalette(showPal, artPal, seed = 0) {
+  if (!artPal || !artPal.length) return showPal;
+  if (!showPal || showPal.length < 2) return artPal;
+  const far = (hex, list) => list.every((x) => isNeutral(x) || isNeutral(hex) || hueDist(hexToHsl(x).h, hexToHsl(hex).h) > 0.07);
+  const lead = showPal.slice(0, 2);
+  const fromArt = artPal.filter((h) => far(h, lead)).slice(0, 2);
+  const out = (seed % 3 === 0 && fromArt.length >= 2) ? fromArt.concat(lead) : lead.concat(fromArt);
+  for (const h of showPal.slice(2)) { if (out.length >= 5) break; if (!out.includes(h) && far(h, out)) out.push(h); }
+  if (out.length < 4 && !out.some(isNeutral)) out.push('#ffffff');
+  return out;
 }

@@ -3,7 +3,10 @@
 //   - ARTISTS: signature designs (palette, logo mark, stage centrepiece, effect preferences)
 //   - resolveProfile(track): Spotify track -> effective show profile (artist match or genre inference)
 //   - seedFromTrack(track) + SongRng: per-song deterministic randomness so every song gets its own show
-// Logo marks are drawn procedurally (see marks.js) — geometric approximations, no image assets.
+// Logo marks are drawn procedurally (see marks.js) as geometric approximations; when the server finds the
+// artist's real logo online (server/logos.js -> web/js/logos.js) the walls use that image instead.
+//   - varyPalette(): per-song colour variety on top of an artist's signature palette (never the same look twice in a row)
+import { hexToHsl, hslToHex, shiftHue, hueDist, isNeutral, vivid, paletteKey } from './colors.js';
 
 // ------------------------------------------------------------------ genre presets
 // style weights are 0..1 (>1 allowed for "signature" emphasis):
@@ -318,6 +321,94 @@ const GENERIC_CENTRES = {
   dnb: ['towers', 'x', 'frame'], hardstyle: ['towers', 'x'], hardcore: ['towers'], trap: ['towers', 'x'], tropical: ['arch', 'sphere', 'ring'], popdance: ['arch', 'ring', 'frame', 'orbit'], afrohouse: ['arch', 'ring'], melodic: ['arch', 'sphere', 'circle'],
 };
 
+// ------------------------------------------------------------------ per-song colour variety
+// Real LDs re-colour the same rig every song; an artist's brand colours anchor the show but never own it.
+// Modes (deterministic per song, never the same mode/palette as the previous song):
+//   signature - brand palette as is, reordered
+//   shift     - all non-neutral colours hue-rotated by the same 25..60 degrees (keeps the "feel", changes the look)
+//   blend     - two brand colours + one or two colours borrowed from a genre palette
+//   genre     - one of the genre palettes (what a guest LD would run)
+//   harmony   - triad / analogous / split-complement scheme built from the brand's primary hue
+// Every palette gets a 4th (and often 5th) accent so the director has enough colours to rotate through
+// phrase by phrase. Low-variety brands (monochrome techno, artColors:false) only get reorders and small shifts.
+const PALETTE_MODES = ['signature', 'shift', 'blend', 'harmony', 'genre'];
+let lastPaletteKey = '', lastPaletteMode = '';
+
+export function varyPalette(base, genrePalettes, rng, variety = 1, matched = true) {
+  const chroma = base.filter((h) => !isNeutral(h));
+  const hasWhite = base.some((h) => hexToHsl(h).l > 0.93);
+  const primary = chroma[0] ? hexToHsl(chroma[0]).h : rng.next();
+  const uniq = (arr) => arr.filter((h, i) => arr.findIndex((x) => x.toLowerCase() === h.toLowerCase()) === i);
+  const farFrom = (hex, list, d = 0.07) => isNeutral(hex) ? !list.some(isNeutral) : list.every((x) => isNeutral(x) || hueDist(hexToHsl(x).h, hexToHsl(hex).h) > d);
+  const modes = variety >= 0.6 ? PALETTE_MODES : ['signature', 'signature', 'shift'];
+  const draws = [rng.next(), rng.next(), rng.next(), rng.next(), rng.next(), rng.next()];
+  const build = (mode) => {
+    let pal;
+    switch (mode) {
+      case 'shift': {
+        if (!chroma.length) return null;
+        const deg = variety >= 0.6 ? 25 + 35 * draws[1] : 4 + 8 * draws[1];
+        const d = (draws[2] < 0.5 ? -1 : 1) * deg / 360;
+        pal = base.map((h) => shiftHue(h, d));
+        break;
+      }
+      case 'blend': {
+        if (chroma.length < 2 || !genrePalettes?.length) return null;
+        const keep = rng.shuffle(chroma).slice(0, 2);
+        const borrowed = rng.shuffle(genrePalettes[Math.floor(draws[3] * genrePalettes.length)]).filter((h) => farFrom(h, keep)).slice(0, 2);
+        pal = keep.concat(borrowed);
+        if (hasWhite && !pal.some(isNeutral)) pal.push('#ffffff');
+        break;
+      }
+      case 'genre': {
+        if (!genrePalettes?.length) return null;
+        pal = rng.shuffle(genrePalettes[Math.floor(draws[3] * genrePalettes.length)]);
+        break;
+      }
+      case 'harmony': {
+        if (!chroma.length) return null;
+        const scheme = ['triad', 'analog', 'split', 'complement'][Math.floor(draws[4] * 4)];
+        const h0 = primary;
+        const hs = scheme === 'triad' ? [h0, h0 + 1 / 3, h0 + 2 / 3]
+          : scheme === 'analog' ? [h0, h0 + 0.09, h0 - 0.09]
+          : scheme === 'split' ? [h0, h0 + 5 / 12, h0 + 7 / 12]
+          : [h0, h0 + 0.5];
+        pal = hs.map((h, i) => vivid(h, i === 0 ? 0.52 : 0.58));
+        pal[0] = chroma[0]; // keep the brand's actual primary, not a re-saturated copy
+        if (hasWhite || scheme === 'complement') pal.push('#ffffff');
+        break;
+      }
+      default:
+        pal = rng.shuffle(base);
+        if (variety < 0.6 && draws[5] < 0.5) pal = base.slice(); // monochrome brands mostly keep their order
+    }
+    pal = uniq(pal);
+    // accent colours: a 4th/5th hue far enough from what's there, so phrase-to-phrase colour changes read
+    if (variety >= 0.6) {
+      const want = 4 + (draws[0] < 0.45 ? 1 : 0);
+      const offs = [1 / 3, 0.5, 2 / 3, 0.42, 0.58, 0.25, 0.75];
+      for (let k = 0; k < offs.length && pal.length < want; k++) {
+        const c = vivid(primary + offs[(k + Math.floor(draws[2] * offs.length)) % offs.length], 0.56);
+        if (farFrom(c, pal, 0.09)) pal.push(c);
+      }
+      if (pal.length < 4 && !pal.some(isNeutral)) pal.push('#ffffff');
+    }
+    return pal.length >= 3 ? pal : null;
+  };
+  // pick a mode; walk to the next one if it repeats the previous song's mode or palette
+  let mi = Math.floor(draws[0] * modes.length), pal = null, mode = '';
+  for (let tries = 0; tries < modes.length + 1; tries++) {
+    mode = modes[(mi + tries) % modes.length];
+    pal = build(mode);
+    if (!pal) continue;
+    const key = paletteKey(pal);
+    const repeats = key === lastPaletteKey || (variety >= 0.6 && mode === lastPaletteMode && modes.length > 2);
+    if (!repeats) { lastPaletteKey = key; lastPaletteMode = mode; return { palette: pal, mode }; }
+  }
+  pal = pal || base.slice(); lastPaletteKey = paletteKey(pal); lastPaletteMode = mode;
+  return { palette: pal, mode };
+}
+
 // ------------------------------------------------------------------ profile resolution
 export function resolveProfile(track, hints = {}) {
   const seed = seedFromTrack(track);
@@ -326,7 +417,10 @@ export function resolveProfile(track, hints = {}) {
   const genreKey = artist ? artist.genre : (hints.genre || 'bigroom');
   const g = GENRES[genreKey] || GENRES.bigroom;
   const style = Object.assign({}, g.style, artist ? artist.style : {});
-  const palette = artist ? artist.palette.slice() : rng.pick(g.palettes).slice();
+  // signature palette is the starting point; every song gets its own re-colouring of it
+  const base = artist ? artist.palette.slice() : rng.pick(g.palettes).slice();
+  const variety = style.colorVariety ?? (style.artColors === false ? 0.3 : 1);
+  const { palette, mode: paletteMode } = varyPalette(base, g.palettes, rng, variety, !!artist);
   const centre = artist ? artist.centre : rng.pick(GENERIC_CENTRES[genreKey] || GENERIC_CENTRES.bigroom);
   const displayName = artist ? (artist.markText || artist.names[0].toUpperCase()) : (track.artist || '').split(/,|&|feat/i)[0].trim().toUpperCase();
   return {
@@ -337,6 +431,8 @@ export function resolveProfile(track, hints = {}) {
     bpm: g.bpm,
     style,
     palette,
+    paletteMode,
+    signaturePalette: base,
     genrePalettes: g.palettes,
     programs: g.programs,
     mark: artist ? artist.mark : 'text',

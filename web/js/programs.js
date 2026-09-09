@@ -11,9 +11,9 @@
 //              kickHit, snareHit, hatHit }   (the *Hit flags are true for one frame)
 //
 // drawProgram() wraps a program with the shared clear/trail handling, phase dimming and the
-// global hits (blackout, whiteout, wall strobe). colorsFrom() builds `col` once per frame.
+// global hits (pre-drop dip, whiteout, wall strobe). colorsFrom() builds `col` once per frame.
 
-import { drawMark } from './marks.js';
+import { drawMark, imageRect } from './marks.js';
 
 const TAU = Math.PI * 2;
 const frac = (x) => x - Math.floor(x);
@@ -199,20 +199,86 @@ export const PROGRAMS = {
       ctx.globalAlpha = reveal; ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
     }
     ctx.globalAlpha = 1;
+    const img = o.logoImg && lg.image ? o.logoImg : null;
     const opts = {
       t: o.t, beat: show.beatPulse, reveal, revealMode: lg.mode || 'wipe', glitch: lg.glitch || 0,
       color: hot || s.style < 0.5 ? '#ffffff' : col.a, color2: col.c, bg: '#000000',
       text: pr.markText || (o.track?.artist || '').split(/,|&|feat/i)[0].trim().toUpperCase() || 'VIRTUAL-FEST',
-      invert: hot && show.kick > 0.6 && s.style > 0.65,
+      invert: !img && hot && show.kick > 0.6 && s.style > 0.65,
+      logoImg: img,
     };
-    const mark = pr.mark || 'text';
+    const mark = img ? 'image' : pr.mark || 'text';
+    // a real logo sits on its own soft glow (the wall's own light bleeding around the mark)
+    const glow = (c, gw, gh) => { if (img && reveal > 0.3) { c.globalAlpha = (0.35 + 0.35 * show.beatPulse) * Math.min(1, (reveal - 0.3) / 0.4); c.globalCompositeOperation = 'lighter'; drawGlow(c, img, gw, gh, hot ? col.a : col.b, 1); c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1; } };
     if (tall) {
       if (!s.sq) { s.sq = document.createElement('canvas'); s.sq.width = w; s.sq.height = w; }
       const c2 = s.sq.getContext('2d');
       c2.clearRect(0, 0, w, w);
+      glow(c2, w, w);
       drawMark(c2, w, w, mark, opts);
       ctx.drawImage(s.sq, 0, (h - w) / 2);
-    } else drawMark(ctx, w, h, mark, opts);
+    } else { glow(ctx, w, h); drawMark(ctx, w, h, mark, opts); }
+  },
+
+  // the real logo tiled over the wall, rows scrolling against each other; cells flash white on the kick
+  logoTile(ctx, w, h, p, show, col, o) {
+    const e = o.logoImg;
+    if (!e) return PROGRAMS.grid(ctx, w, h, p, show, col, o);
+    const s = st(p, 'logoTile', () => ({ rows: hash1(o.variant + 91) < 0.5 ? 2 : 3, dir: hash1(o.variant + 92) < 0.5 ? 1 : -1, alt: hash1(o.variant + 93) < 0.6 }));
+    const tall = h > w * 1.1;
+    const rows = tall ? Math.max(3, Math.round(h / (w / 1.4))) : s.rows;
+    const cell = tall ? h / rows : h / rows;
+    const aspect = Math.max(0.6, Math.min(3.2, e.aspect));
+    const cw = cell * aspect * 1.15, ch = cell;
+    const cols = Math.ceil(w / cw) + 2;
+    const bt = beatTime(show);
+    ctx.fillStyle = rgba(col.cr, 0.22 + 0.1 * show.energy); ctx.fillRect(0, 0, w, h);
+    const kick = show.kick;
+    for (let r = 0; r < rows; r++) {
+      const dir = s.alt && r % 2 ? -s.dir : s.dir;
+      const off = frac(bt * 0.125 * dir + hash1(r + 3)) * cw;
+      const c = r % 2 ? col.b : col.a;
+      for (let i = -1; i < cols; i++) {
+        const x = i * cw + off - cw, y = r * ch;
+        const hi = kick > 0.35 && hash1(i * 7 + r * 13 + Math.floor(bt)) < 0.3 * kick + 0.1;
+        const img = e.tint(hi ? '#ffffff' : c);
+        const k = 0.72 * (1 + 0.06 * show.beatPulse);
+        let dw = cw * k, dh = dw / e.aspect; if (dh > ch * k) { dh = ch * k; dw = dh * e.aspect; }
+        ctx.globalAlpha = hi ? 1 : 0.85;
+        ctx.drawImage(img, x + (cw - dw) / 2, y + (ch - dh) / 2, dw, dh);
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+
+  // the real logo blasts out of the centre every beat, leaving echoes; snare hits tear it apart
+  logoBurst(ctx, w, h, p, show, col, o) {
+    const e = o.logoImg;
+    if (!e) return PROGRAMS.rays(ctx, w, h, p, show, col, o);
+    const s = st(p, 'logoBurst', () => ({ half: hash1(o.variant + 95) < 0.4, glitch: 0 }));
+    const tall = h > w * 1.1;
+    const bt = beatTime(show), rate = s.half && show.phase !== 'drop' ? 0.5 : 1;
+    const f = frac(bt * rate);
+    s.glitch = Math.max(o.snareHit ? 0.7 : 0, s.glitch * (1 - o.dt * 6));
+    const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.hypot(w, h) * 0.5);
+    bg.addColorStop(0, rgba(col.br, 0.35 * (1 - f) + 0.15)); bg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    const draw = (c, gw, gh) => {
+      c.globalCompositeOperation = 'lighter';
+      for (let k = 2; k >= 0; k--) {
+        const ff = f + k * 0.28; if (ff > 1.3) continue;
+        const scale = 0.55 + 0.85 * ff;
+        c.globalAlpha = (k ? 0.22 : 0.9) * Math.max(0, 1 - ff / 1.3);
+        drawMark(c, gw, gh, 'image', { t: o.t, beat: 0, reveal: 1, glitch: k ? 0 : s.glitch, color: k ? (k === 1 ? col.a : col.b) : '#ffffff', bg: '#000000', logoImg: e, logoScale: scale });
+      }
+      c.globalAlpha = 0.5 + 0.4 * show.beatPulse;
+      drawGlow(c, e, gw, gh, col.a, 0.55 + 0.85 * f);
+      c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+    };
+    if (tall) {
+      if (!s.sq) { s.sq = document.createElement('canvas'); s.sq.width = w; s.sq.height = w; }
+      const c2 = s.sq.getContext('2d'); c2.clearRect(0, 0, w, w); draw(c2, w, w); ctx.drawImage(s.sq, 0, (h - w) / 2);
+    } else draw(ctx, w, h);
   },
 
   // nested shapes flying out of the centre, one per half beat
@@ -667,7 +733,18 @@ export const PROGRAM_INFO = {
   shards: { energy: 0.85, trail: 0.3 }, rings: { energy: 0.7, trail: 0 }, noise: { energy: 0.9, trail: 0 }, grid: { energy: 0.5, trail: 0 },
   strobeBars: { energy: 0.95, trail: 0.5 }, scan: { energy: 0.6, trail: 0.25 }, particles: { energy: 0.5, trail: 0.25 }, glitch: { energy: 0.85, trail: 0 },
   disco: { energy: 0.6, trail: 0 }, mandala: { energy: 0.6, trail: 0.2 }, hexes: { energy: 0.65, trail: 0.2 },
+  logoTile: { energy: 0.6, trail: 0, needsLogo: true }, logoBurst: { energy: 0.8, trail: 0.3, needsLogo: true },
 };
+
+// programs that read well with the real logo floating over them (stage.logoOverlay)
+const OVERLAY_OK = new Set(['rays', 'tunnel', 'rings', 'mandala', 'sun', 'disco', 'hexes', 'aurora', 'waves', 'starfield', 'particles', 'blobs', 'wash', 'grid', 'scan']);
+
+// the logo's soft glow, fitted like the logo itself (the glow canvas carries a 24 px margin)
+function drawGlow(ctx, e, w, h, color, k = 1) {
+  const [x, y, dw, dh] = imageRect(e, w, h, k);
+  const sc = dw / e.w;
+  ctx.drawImage(e.glowTint(color), w / 2 + x - 24 * sc, h / 2 + y - 24 * sc, e.glow.width * sc, e.glow.height * sc);
+}
 
 const DIM = { idle: 0.25, intro: 0.55, groove: 0.85, build: 0.9, drop: 1, peak: 1, breakdown: 0.6 };
 
@@ -689,23 +766,38 @@ export function drawProgram(ctx, w, h, panel, show, col, o) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
-  if (show.blackout) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); return; }
   const trail = info.trail || 0;
   ctx.fillStyle = trail > 0 ? `rgba(0,0,0,${trail})` : '#000';
   ctx.fillRect(0, 0, w, h);
   PROGRAMS[prog](ctx, w, h, panel, show, col, o);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
+  // the real logo floating over a content program (breakdown / peak phrases), on a dark halo so it reads
+  const ov = o.logoOverlay || 0;
+  if (ov > 0.02 && o.logoImg && OVERLAY_OK.has(prog) && (panel.role === 'main' || panel.role === 'holo' || panel.role === 'wing')) {
+    const e = o.logoImg, k = 0.7 * (1 + 0.05 * show.beatPulse);
+    const halo = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.hypot(w, h) * 0.4);
+    halo.addColorStop(0, `rgba(0,0,0,${0.6 * ov})`); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo; ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5 * ov;
+    drawGlow(ctx, e, w, h, col.a, k);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = ov;
+    const [x, y, dw, dh] = imageRect(e, w, h, k);
+    ctx.drawImage(e.tint(ph === 'drop' || ph === 'peak' ? '#ffffff' : col.b), w / 2 + x, h / 2 + y, dw, dh);
+    ctx.globalAlpha = 1;
+  }
   const dim = DIM[ph] ?? 1;
   if (dim < 1) { ctx.globalAlpha = 1 - dim; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }
   // wall strobe — kept off logo/text so the mark reads; scaled by the artist's taste for white
   const white = o.white == null ? 0.5 : o.white;
-  if (prog !== 'logo' && prog !== 'text' && white > 0.05) {
+  if (prog !== 'logo' && prog !== 'text' && prog !== 'logoBurst' && white > 0.05) {
     let a = 0;
     if (ph === 'drop' && show.strobe >= 0.99) a = frac(show.t * 12) < 0.5 ? 0.7 : 0;
     else if (ph === 'build' && show.buildProgress > 0.7) a = frac(show.t * Math.max(4, show.strobeRate)) < 0.5 ? ((show.buildProgress - 0.7) / 0.3) * 0.5 : 0;
     if (a > 0) { ctx.globalAlpha = a * white; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
   }
+  const dip = show.dip || 0;
+  if (dip > 0) { ctx.globalAlpha = Math.min(0.85, dip * 0.85); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }
   if (show.whiteout > 0) { ctx.globalAlpha = Math.min(1, show.whiteout); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); }
   ctx.globalAlpha = 1;
 }
