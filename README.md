@@ -124,7 +124,7 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   read back asynchronously), tracks the brightest quarter of the frame, and closes the
   exposure by up to a stop when a laser and beam wall starts to blow the stage out, so the
   stage stays legible through the heaviest drop moments and never dims on a dark wide shot.
-- `web/js/festival.js` — the grounds: sky dome with stars, moon and horizon glow,
+- `web/js/festival.js` — the grounds under a pure black night sky (stars only, no moon, no sky glow):
   hills and tree lines, a ferris wheel and a drop tower with chasing pixel rims, four crowd
   lighting towers with pixel edges and level meters, six perimeter skytrackers, wristbands
   that pulse with the show, festoon strings over the field, the entrance gate with its pixel-outlined VIRTUAL-FEST sign, a lit

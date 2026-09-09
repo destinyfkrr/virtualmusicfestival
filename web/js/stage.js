@@ -141,9 +141,9 @@ export class Stage {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x020209);
-    this.scene.fog = new THREE.FogExp2(0x04040c, 0.0045 / WORLD_SCALE);
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 750 * WORLD_SCALE);   // far: the sky dome (640 site units) must fit
+    this.scene.background = new THREE.Color(0x000000);   // pure black night sky: no dome, no moon, no glow, only the stars
+    this.scene.fog = new THREE.FogExp2(0x000000, 0.0045 / WORLD_SCALE);   // fog fades to the same black as the sky
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 750 * WORLD_SCALE);   // far: the star shell (480 site units) must fit
     this.camera.position.set(0, 18 * WORLD_SCALE, 70 * WORLD_SCALE);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -292,7 +292,7 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ lighting rig
-  // ---- festival grounds: sky, landscape, rides, towers, wristbands, festoons, gate, dressing
+  // ---- festival grounds: landscape, rides, towers, wristbands, festoons, gate, dressing
   _buildFestival() {
     this.fest = new Festival(this.big, this.crowd, this.mainPanel.mat);
   }

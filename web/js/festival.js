@@ -1,5 +1,5 @@
 // Festival grounds — everything around the main stage so the arena reads as a real festival site:
-//   Sky          gradient dome (horizon glow towards the stage, aurora in breakdowns) + moon
+//   (no sky dome: the sky is the pure black scene background plus the stars built in stage.js, nothing else)
 //   Landscape    hills + treeline silhouettes + lit trees framing the arena
 //   FerrisWheel  rotating wheel with its own pixel rim/spokes (rainbow chase, beat flashes)
 //   DropTower    drop-tower ride: rises during builds, free-falls on the drop
@@ -35,63 +35,6 @@ function textTexture(text, w = 1024, h = 192, fg = '#ffffff', bg = 'rgba(0,0,0,0
   ctx.fillText(text, w / 2, h / 2 + h * 0.03);
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   return tex;
-}
-
-// ---------------------------------------------------------------- sky
-const skyVert = /* glsl */`varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const skyFrag = /* glsl */`
-  uniform vec3 uHorizon, uZenith, uGlow, uAurora; uniform float uT, uAuroraK, uGlowK;
-  varying vec3 vP;
-  void main(){
-    vec3 d = normalize(vP);
-    float h = clamp(d.y, 0.0, 1.0);
-    vec3 col = mix(uHorizon, uZenith, pow(h, 0.5));
-    float toStage = max(0.0, -d.z);                       // the stage sits at -z: light pollution glow above it
-    col += uGlow * uGlowK * pow(toStage, 4.0) * pow(1.0 - h, 5.0);
-    float band = 0.5 + 0.5 * sin(d.x * 7.0 + uT * 0.12 + 1.6 * sin(d.z * 4.0 - uT * 0.07));
-    float band2 = 0.5 + 0.5 * sin(d.x * 3.0 - uT * 0.05 + d.y * 9.0);
-    float a = smoothstep(0.12, 0.5, h) * (1.0 - smoothstep(0.55, 0.95, h));
-    col += uAurora * uAuroraK * band * band2 * a;
-    gl_FragColor = vec4(col, 1.0);
-  }`;
-
-export class Sky {
-  constructor() {
-    this.group = new THREE.Group();
-    this.uni = {
-      uHorizon: { value: new THREE.Color(0.05, 0.04, 0.11) }, uZenith: { value: new THREE.Color(0.004, 0.004, 0.012) },
-      uGlow: { value: new THREE.Color(0.3, 0.2, 0.5) }, uAurora: { value: new THREE.Color(0.1, 0.5, 0.4) },
-      uT: { value: 0 }, uAuroraK: { value: 0.2 }, uGlowK: { value: 0.5 },
-    };
-    const mat = new THREE.ShaderMaterial({ uniforms: this.uni, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false, fog: false });
-    this.dome = new THREE.Mesh(new THREE.SphereGeometry(640, 40, 20), mat);
-    this.dome.frustumCulled = false; this.dome.renderOrder = -10;
-    this.group.add(this.dome);
-    this.moonMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.95, 0.93, 0.85), fog: false, toneMapped: false });
-    this.moon = new THREE.Mesh(new THREE.SphereGeometry(13, 24, 16), this.moonMat);
-    this.moon.position.set(-190, 150, -330);
-    this.group.add(this.moon);
-    // soft moon halo (billboard)
-    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
-    const g = cv.getContext('2d').createRadialGradient(64, 64, 0, 64, 64, 64);
-    g.addColorStop(0, 'rgba(255,250,230,0.55)'); g.addColorStop(0.35, 'rgba(255,240,220,0.18)'); g.addColorStop(1, 'rgba(255,240,220,0)');
-    const ctx = cv.getContext('2d'); ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0.45 }));
-    halo.position.copy(this.moon.position); halo.scale.set(52, 52, 1);
-    this.group.add(halo);
-  }
-  update(show) {
-    const u = this.uni, ph = show.phase;
-    u.uT.value = show.t;
-    const A = show.colorA, B = show.colorB;
-    u.uHorizon.value.setRGB(0.045, 0.035, 0.105).lerp(_c.copy(A).multiplyScalar(0.12), 0.35);
-    u.uGlow.value.copy(A).lerp(B, 0.3).multiplyScalar(0.6);
-    const hi = ph === 'drop' || ph === 'peak';
-    u.uGlowK.value = clamp(0.25 + 0.9 * show.energy + 0.5 * show.whiteout, 0.2, 1.4) * (hi ? 1 : 0.8);
-    u.uAurora.value.copy(B).lerp(_c.copy(show.colorC), 0.5).multiplyScalar(0.28);
-    const target = ph === 'breakdown' ? 1 : ph === 'intro' ? 0.8 : ph === 'idle' ? 0.5 : ph === 'build' ? 0.45 : 0.18;
-    u.uAuroraK.value += (target - u.uAuroraK.value) * Math.min(1, show.dt * 0.6);
-  }
 }
 
 // ---------------------------------------------------------------- landscape
@@ -619,7 +562,6 @@ export class Festival {
   constructor(scene, crowd, mainMat) {
     this.scene = scene; this.crowd = crowd;
     this.px = new PixelStrips('sphere');
-    this.sky = new Sky(); scene.add(this.sky.group);
     this.land = new Landscape(); scene.add(this.land.group);
     this.wheel = new FerrisWheel(V3(-108, 0, 78), 0); scene.add(this.wheel.group);
     this.tower = new DropTower(V3(112, 0, 84)); scene.add(this.tower.group);
@@ -645,7 +587,6 @@ export class Festival {
   setGain(k) { this.towers.setGain(k); }
   update(show, dt, levels) {
     show.levels = levels;
-    this.sky.update(show);
     this.wheel.update(show, dt);
     this.tower.update(show, dt);
     this.towers.update(show, dt);
