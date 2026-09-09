@@ -336,8 +336,12 @@ export class LedPanel {
     this.programSince = 0;
     this.state = {};                      // per-program scratch (rings, particles ...)
     this.text = '';
+    this.live = false;                    // sampling a live source (the IMAG feed) instead of the canvas
   }
   draw(fn) { fn(this.ctx, this.cw, this.ch, this); this.tex.needsUpdate = true; }
+  // a live texture in place of the canvas (`null` restores it); the cell grid stays the panel's own, so the LED pitch
+  // does not change with the source
+  setSource(tex) { this.live = !!tex; this.mat.uniforms.map.value = tex || this.tex; }
   dispose() { this.tex.dispose(); this.mat.dispose(); this.mesh.geometry.dispose(); }
 }
 

@@ -17,6 +17,7 @@ import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { V3, BEAM_GAIN, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel, Crowd, Particles, pathLine, pathArc, pathRect } from './fixtures.js';
 import { Centrepiece, ORIGIN } from './centrepieces.js';
 import { Festival } from './festival.js';
+import { Djs, DECK, FIGURE_LIGHT } from './dj.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
 
@@ -27,9 +28,9 @@ const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const smooth = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
 const hash = (n) => { let x = Math.imul(n | 0, 374761393); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const HI = new Set(['drop', 'peak']);
-const SHOTS = 10;   // every shot frames the stage (see Stage._updateCamera)
-const DROP_SHOTS = [0, 3, 5, 8, 4, 9];
-const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const SHOTS = 11;   // every shot frames the stage (see Stage._updateCamera); 10 is the booth close-up on the DJs
+const DROP_SHOTS = [0, 3, 5, 8, 4, 9, 10, 10];
+const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 // Auto-iris (IrisPass / Stage._readIris / _updateWorld): highlight-priority auto exposure, like a broadcast camera's
 // iris. The composer's HDR buffer (scene + bloom, before tone mapping) is metered into 16x9 cells: each cell is the
 // mean of 64 taps of luminance clamped at IRIS_RANGE, so a beam at 40x counts the same as one at 2x and the meter
@@ -95,6 +96,20 @@ const BOOTH_POOL = ['bars', 'pulse', 'lines', 'scan', 'strobeBars', 'chevrons', 
 const RIBBON_POOL = ['bars', 'lines', 'scan', 'pulse', 'strobeBars', 'chevrons', 'waves', 'noise', 'particles'];
 const HOLO_POOL = ['rings', 'mandala', 'figure', 'sun', 'particles', 'starfield', 'hexes', 'shards', 'tunnel', 'aurora', 'blobs', 'disco'];
 const FLAME_X = [-24, -16, -8, 8, 16, 24];
+// IMAG (the live DJ feed on the side screens): the objects the booth camera sees live on this layer, and its shots are
+// authored in site units around the DJ's head (~(0, 7.2, -0.75)) and the console (top at y 6.55, front edge z 0.4)
+const IMAG_LAYER = 1;
+// the feed is lit like a broadcast booth camera would be: for the feed render only, the booth light runs hotter and
+// the figures' fill and rim open up, so a DJ in a black tee reads on the wings instead of cutting a silhouette
+const IMAG_KEY = 2.5, IMAG_FILL = 2.5, IMAG_RIM = 1.5;
+const _imagFill = new THREE.Color(), _imagRim = new THREE.Color();
+const IMAG_PRESETS = [
+  { eye: [0.3, 7.0, 5.6], look: [0, 6.85, -0.75], fov: 26 },     // front, from the pit: the DJ over the console
+  { eye: [-3.6, 7.5, 2.6], look: [0, 6.7, -0.6], fov: 28 },      // stage-left three-quarter
+  { eye: [3.4, 7.4, 2.9], look: [0, 6.7, -0.6], fov: 28 },       // stage-right three-quarter
+  { eye: [1.0, 8.2, 3.4], look: [0, 6.5, -0.2], fov: 30 },       // high over the decks: the hands on the players
+  { eye: [0, 6.7, 4.4], look: [0, 7.0, -0.75], fov: 24 },        // low and tight: the face, the hands up
+];
 const SPARK_X = [-20, -10, 10, 20];
 const BAND_BINS = [[1, 3], [3, 6], [6, 12], [12, 24], [24, 48], [48, 96], [96, 200], [200, 420]];
 const ZONE = { arch: 0, truss: 1, tower: 2, col: 3, deck: 4, frame: 5, drop: 6, runway: 7, floor: 9, riser: 10 };
@@ -149,12 +164,12 @@ export class Stage {
     this.controls.enableDamping = true;
     this.controls.target.set(0, 13 * WORLD_SCALE, -6 * WORLD_SCALE);
     this.controls.maxPolarAngle = Math.PI * 0.52;
-    this.controls.minDistance = 8 * WORLD_SCALE;
+    this.controls.minDistance = 3 * WORLD_SCALE;   // the booth close-up (shot 10) orbits ~4 site units from the DJs; OrbitControls clamps the radius after the shot lerp
     this.controls.maxDistance = 220 * WORLD_SCALE;
     this.manualUntil = 0;
     this.controls.addEventListener('start', () => { this.manualUntil = performance.now() + 25000; });
 
-    this.autoCam = true; this.shotIndex = 0; this.shotStartBar = 0; this.shotTime = 0; this.shotOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; this.shotPtr = 0;
+    this.autoCam = true; this.shotIndex = 0; this.shotStartBar = 0; this.shotTime = 0; this.shotOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; this.shotPtr = 0;
     this.track = null; this.t = 0; this.textUntil = 0; this.dropBar = -100; this.lastProgPick = -100;
     this.logo = { on: false, at: -1, len: 6, until: 0, since: 0, mode: 'wipe', g0: 0.5, last: -100, mirror: false, image: false, overlayUntil: 0 };
     this.fx = { flameUntil: 0, sparkUntil: 0 };
@@ -188,8 +203,8 @@ export class Stage {
     // `big` holds the whole site (set, rig, centrepiece, grounds, crowd, particles, point lights) at WORLD_SCALE; only the
     // sky-level dressing (ground plane, stars, ambient light) and the camera live in the scene itself.
     const b = this.big = new THREE.Group(); b.scale.setScalar(WORLD_SCALE); s.add(b);
-    s.add(new THREE.AmbientLight(0x222233, 0.3));
-    s.add(new THREE.HemisphereLight(0x223355, 0x050508, 0.25));
+    this.ambLight = new THREE.AmbientLight(0x222233, 0.3); s.add(this.ambLight);
+    this.hemiLight = new THREE.HemisphereLight(0x223355, 0x050508, 0.25); s.add(this.hemiLight);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(800 * WORLD_SCALE, 800 * WORLD_SCALE), new THREE.MeshStandardMaterial({ color: 0x16161f, roughness: 0.9 }));
     ground.rotation.x = -Math.PI / 2; s.add(ground);
     const starGeo = new THREE.BufferGeometry(); const sp = new Float32Array(1800 * 3);
@@ -208,8 +223,12 @@ export class Stage {
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.8, metalness: 0.3 });
     const truss = new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 0.5, metalness: 0.8 });
     const box = (w, h, d, x, y, z, m = dark) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); s.add(mesh); return mesh; };
-    box(56, 2.2, 16, 0, 1.1, -3); box(14, 1.2, 6, 0, 2.8, -2); box(9, 2.2, 3, 0, 4.5, -1);
-    const dj = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.55, 4, 8), new THREE.MeshStandardMaterial({ color: 0x0a0a0a })); dj.position.set(0, 6.06, -1.95); s.add(dj);   // human-sized, standing behind the booth table
+    this.riser = [box(56, 2.2, 16, 0, 1.1, -3), box(14, 1.2, 6, 0, 2.8, -2), box(9, 2.2, 3, 0, 4.5, -1)];
+    // the DJs: figures behind the players that DJ to the beat grid (dj.js), built at stage scale (DECK.SCALE) so they
+    // and the console read from the field, under their own warm booth key light so they read on the booth close-up
+    // and the front shots while the rig is dark around them
+    this.djs = new Djs(DECK.SCALE); s.add(this.djs.group);
+    this.boothLight = new THREE.PointLight(0xfff1e0, 80 * LIGHT_K, 16 * WORLD_SCALE, 2); this.boothLight.position.set(0, 10.5, 3.5); s.add(this.boothLight);
 
     // LED walls
     this.panels = [];
@@ -295,6 +314,15 @@ export class Stage {
   // ---- festival grounds: landscape, rides, towers, wristbands, festoons, gate, dressing
   _buildFestival() {
     this.fest = new Festival(this.big, this.crowd, this.mainPanel.mat);
+    // IMAG: the live DJ feed a festival's side screens carry. A second camera in the booth renders the act, the console,
+    // the riser and the walls behind them (layer 1 only: no crowd, no field, no beams, no lasers) into a small portrait
+    // target every other frame; while the wings run the 'imag' program their LED shader samples that target instead of
+    // their canvas. The target is twice the wing's cell grid so each LED averages a 2x2 block of the feed.
+    this.imag = { rt: new THREE.WebGLRenderTarget(96, 144, { depthBuffer: true, stencilBuffer: false }), cam: new THREE.PerspectiveCamera(26, 96 / 144, 0.5, 260 * WORLD_SCALE),
+      on: false, preset: -1, sinceBar: 0, untilBar: -1, last: -30, frame: 0, frames: 0, t0: 0, eye: new THREE.Vector3(), look: new THREE.Vector3() };
+    this.imag.rt.texture.minFilter = THREE.LinearFilter; this.imag.rt.texture.magFilter = THREE.LinearFilter; this.imag.rt.texture.generateMipmaps = false;
+    this.imag.cam.layers.set(IMAG_LAYER);
+    this._imagLayer();
   }
 
   _buildRig() {
@@ -377,6 +405,7 @@ export class Stage {
   // ------------------------------------------------------------ artist / song
   setProfile(profile) {
     this.profile = profile; this.style = profile.style || {};
+    if (this.djs) { this.djs.setAct(profile, this.track); this._imagLayerDjs(); }
     const rng = this.rng = new SongRng((profile.seed ^ Math.imul((profile.variant | 0) + 1, 0x9E3779B1)) >>> 0);
     const hardish = profile.genre === 'techno' || profile.genre === 'trance' || profile.genre === 'hardstyle' || profile.genre === 'hardtechno' || profile.genre === 'psytrance';
     this.song = {
@@ -414,6 +443,7 @@ export class Stage {
   setTrack(track) {
     const changed = !this.track || this.track.id !== track.id;
     this.track = track; this.o.track = track;
+    if (this.djs) { this.djs.setAct(this.profile, track); this._imagLayerDjs(); }
     if (changed && track.state !== 'stopped' && track.name) {
       const t = this.t, r = this.rng;
       this.textUntil = t + 5;
@@ -483,6 +513,7 @@ export class Stage {
       const sh = d.show, ph = sh.phase, s = this.style, pal = sh.palette;
       // Peak-phase pyro stays at deck level (cold sparks every 4 bars): the air over the stage is clear between drops.
       if (ph === 'peak' && sh.active && bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
+      this._imagBar(bar, ph, sh);
       if (ph === 'drop' && bar - this.dropBar === 2) this.pickProgram(true, ['wing', 'tower', 'booth', 'top', 'side']);
       if (bar % 4 === 0) this.pickPattern(false);
       if (bar % 8 === 0 && this.t - this.lastProgPick > 12) this.pickProgram(false);
@@ -562,6 +593,7 @@ export class Stage {
       if (logoOnly && p.program !== 'logo') continue;
       if (p.program === 'text' && t < this.textUntil) continue;
       if (p.program === 'logo' && this.logo.on) continue;
+      if (p.program === 'imag' && !this.imag.ending) continue;
       let next;
       if (p.role === 'wing' && this.song.wingsFollow && mainProg) next = mainProg;
       else next = this._choose(this._pool(p), ph, force ? null : p.program);
@@ -570,15 +602,71 @@ export class Stage {
     }
   }
 
+  // ------------------------------------------------------------ IMAG (live DJ feed on the wings)
+  // the objects the IMAG camera sees (layer 1): the act, the console, the riser, the walls behind the booth, the pixel
+  // architecture and the set's own lights — nothing of the field
+  _imagLayer() {
+    const on = (o) => o && o.traverse(c => c.layers.enable(IMAG_LAYER));
+    this._imagLayerDjs();
+    for (const m of this.riser) on(m);
+    for (const m of this.fest.dress.booth) on(m);
+    for (const p of this.panels) if (p.role === 'main' || p.role === 'booth' || p.role === 'ribbon') on(p.mesh);
+    on(this.pixels.mesh);
+    for (const l of [this.ambLight, this.hemiLight, this.stageLight, this.boothLight]) l.layers.enable(IMAG_LAYER);
+  }
+  _imagLayerDjs() { this.djs.group.traverse(c => c.layers.enable(IMAG_LAYER)); }
+  // the side screens cut to the DJ feed the way a festival's vision mixer does: a phrase at a time, more often in the
+  // groove, the build and the breakdown (the crowd watches the DJ work), a short cut a couple of bars into a drop,
+  // never over a logo or a text card, with a new angle every 4 bars
+  _imagBar(bar, ph, sh) {
+    const I = this.imag, wings = this.panels.filter(p => p.role === 'wing');
+    if (!wings.length) return;
+    if (wings.some(p => p.program === 'imag')) {
+      if (bar >= I.untilBar || !sh.active) this._imagStop();
+      else if ((bar - I.sinceBar) % 4 === 0) this._imagCut();
+      return;
+    }
+    if (!sh.active || this.logo.on || bar % 4 !== 0 || this.t - I.last < 10) return;
+    if (wings.some(p => p.program === 'text' || p.program === 'logo')) return;
+    const p = ph === 'drop' ? (sh.phaseBars >= 2 ? 0.3 : 0) : ph === 'peak' ? 0.4 : ph === 'build' ? 0.5 : ph === 'breakdown' ? 0.55 : ph === 'groove' ? 0.55 : ph === 'intro' ? 0.35 : 0;
+    if (!this.rng.chance(p)) return;
+    this._imagStart(bar, ph === 'drop' ? 4 : 8);
+  }
+  _imagStart(bar, bars) {
+    const I = this.imag;
+    for (const w of this.panels) if (w.role === 'wing') { w.program = 'imag'; w.programSince = this.t; }
+    I.sinceBar = bar; I.untilBar = bar + bars; this._imagCut();
+  }
+  _imagStop() {
+    const I = this.imag;
+    I.ending = true; this.pickProgram(true, ['wing']); I.ending = false;
+    I.last = this.t; I.untilBar = -1;
+  }
+  _imagCut() { const I = this.imag; I.preset = (I.preset + 1 + this.rng.int(IMAG_PRESETS.length - 1)) % IMAG_PRESETS.length; I.t0 = this.t; }
+  // key I: put the feed up now for 8 bars
+  triggerImag() { const bar = this.director.show.barIndex | 0; if (this.panels.some(p => p.role === 'wing' && p.program === 'imag')) this._imagCut(); else this._imagStart(bar, 8); }
+  _updateImag(show) {
+    const I = this.imag;
+    I.on = this.panels.some(p => p.role === 'wing' && p.program === 'imag');
+    if (!I.on) return;
+    const P = IMAG_PRESETS[Math.max(0, I.preset)], t = this.t - I.t0, back = 1 + 0.22 * (this.djs.count - 1);
+    // a slow push over the first 8 s, a handheld sway, a duo / trio framed from further back, the kick nudging the zoom
+    const e = I.eye.set(P.eye[0], P.eye[1], P.eye[2]), l = I.look.set(P.look[0], P.look[1], P.look[2]);
+    e.sub(l).multiplyScalar(back * (1 - 0.06 * Math.min(1, t / 8))).add(l);
+    e.x += Math.sin(t * 0.7) * 0.05; e.y += Math.sin(t * 0.9 + 1) * 0.03; l.x += Math.sin(t * 0.5 + 2) * 0.03;
+    I.cam.position.copy(e).multiplyScalar(WORLD_SCALE); I.cam.lookAt(l.multiplyScalar(WORLD_SCALE));
+    I.cam.fov = (P.fov || 26) * (1 - 0.03 * (show.kick || 0)); I.cam.updateProjectionMatrix();
+  }
+
   // ------------------------------------------------------------ camera
   cutCamera(reason) {
     if (performance.now() < this.manualUntil) return;
     const sh = this.director.show, rng = this.rng;
     let next;
     if (reason === 'drop') next = rng.pick(DROP_SHOTS);
-    else if (reason === 'build') next = rng.pick([5, 4, 0, 8, 7]);
-    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9]);
-    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 7]);
+    else if (reason === 'build') next = rng.pick([5, 4, 0, 8, 7, 10]);
+    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9, 10]);
+    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 7, 10]);
     else next = this.shotOrder[this.shotPtr++ % this.shotOrder.length];
     if (next === this.shotIndex) next = (next + 1) % SHOTS;
     this.shotIndex = next; this.shotStartBar = sh.barIndex; this.shotTime = 0; this.iris.snapIn = 4;
@@ -605,11 +693,12 @@ export class Stage {
       case 7: v.set(-34 + 6 * T, 8 + 2 * T, 30 - 6 * T); look.set(4 - 4 * T, 13, -8); break;                                    // raking along the stage face
       case 8: v.set(Math.sin(t * 0.15) * 10, 42 - 6 * T, 34 - 8 * T); look.set(0, 8, -8); break;                                 // top-down over the roof
       case 9: v.set(Math.sin(t * 0.2) * 2, 14 - T, 30 - 14 * T); look.set(0, 13.5, -10); break;                                  // centrepiece push-in
+      case 10: { const a = Math.sin(t * 0.12) * 0.9, r = 5.2 - 1.4 * T, cz = (DECK.Z0 + DECK.STAND_Z) * DECK.SCALE; v.set(Math.sin(a) * r, 7.1 + 0.25 * T, cz + Math.cos(a) * r); look.set(0, 6.75, cz); break; }   // booth close-up: the DJs at work, orbiting slowly in front of the players
       default: v.set(0, 18, 70);
     }
     v.multiplyScalar(WORLD_SCALE); look.multiplyScalar(WORLD_SCALE);
     if (eye) v.y = eye;
-    v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04);
+    v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04) * (this.shotIndex === 10 ? 0.4 : 1);   // the close-up gets a gentler kick bounce
     const k = 1 - Math.exp(-dt * (t < 0.05 ? 100 : 2.5));
     this.camera.position.lerp(v, k);
     this.controls.target.lerp(look, k);
@@ -646,8 +735,10 @@ export class Stage {
     }
     this.crowd.update(show);
     this.fest.update(show, dt, this.levels);
+    this.djs.update(show, dt);
     this._updateFx(show, dt);
     this._updateCamera(dt, show);
+    this._updateImag(show);
     this._updateWorld(show, dt);
   }
 
@@ -833,7 +924,11 @@ export class Stage {
     const t = this.t;
     if (t >= this.textUntil) for (const p of this.panels) if (p.program === 'text') { p.program = 'wash'; this.pickProgram(true, [p.role]); }
     const o = this.o;
-    for (const p of this.allPanels) p.draw((ctx, w, h, panel) => drawProgram(ctx, w, h, panel, show, col, o));
+    for (const p of this.allPanels) {
+      const live = p.program === 'imag';
+      if (live !== p.live) p.setSource(live ? this.imag.rt.texture : null);
+      if (!live) p.draw((ctx, w, h, panel) => drawProgram(ctx, w, h, panel, show, col, o));
+    }
   }
 
   _updateFx(show, dt) {
@@ -876,7 +971,19 @@ export class Stage {
     this.camera.updateProjectionMatrix();
   }
 
-  render() { this.composer.render(); }
+  render() {
+    const I = this.imag;
+    if (I.on && (I.frame++ & 1) === 0) {
+      const r = this.renderer, bl = this.boothLight, F = FIGURE_LIGHT, bi = bl.intensity;
+      bl.intensity = bi * IMAG_KEY;
+      _imagFill.copy(F.fill.value); _imagRim.copy(F.rim.value);
+      F.fill.value.multiplyScalar(IMAG_FILL); F.rim.value.multiplyScalar(IMAG_RIM);
+      r.setRenderTarget(I.rt); r.clear(); r.render(this.scene, I.cam); r.setRenderTarget(null);
+      bl.intensity = bi; F.fill.value.copy(_imagFill); F.rim.value.copy(_imagRim);
+      I.frames++;
+    }
+    this.composer.render();
+  }
 
   // Meters the composer's HDR buffer into a 16x9 byte target and reads it back without a stall (PBO + fence);
   // every other frame is plenty for an iris. Any failure switches the iris off and the exposure settles at its base.

@@ -258,6 +258,8 @@ export function extractArtistNames(track) {
   const out = [];
   const push = (s) => { s = norm(s).replace(/^\(|\)$/g, '').trim(); if (s && !out.includes(s)) out.push(s); };
   const splitList = (s) => s.split(/\s*(?:,|&|\+|\/|\bx\b|\bvs\.?\b|\band\b|\bwith\b|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b)\s*/i);
+  // whole names first (a split on "&" would turn "W&W" into "w" + "w" and "Aly & Fila" into two solo names), then the parts
+  for (const part of (track.artist || '').split(/\s*(?:,|\/|\+)\s*/)) push(part);
   for (const part of splitList(track.artist || '')) push(part);
   const name = track.name || '';
   for (const m of name.matchAll(/\((?:feat\.?|ft\.?|with)\s+([^)]+)\)/gi)) for (const p of splitList(m[1])) push(p);

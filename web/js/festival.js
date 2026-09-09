@@ -7,10 +7,11 @@
 //   Wristbands   LED wristbands on half the crowd: waves, chases, kick flashes, drop whiteouts
 //   Festoons     catenary bulb strings + bunting across the field
 //   Gate         entrance arch at the back of the field with a VIRTUAL-FEST sign
-//   Dressing     PA hangs, sub stacks, rails, stairs, DJ gear (human scale inside the big set), food stalls
+//   Dressing     PA hangs, sub stacks, rails, stairs, DJ booth gear (stage scale, laid out from dj.js DECK), food stalls
 // All of it is instanced or shader-driven; the per-frame CPU work is a few thousand colour writes.
 import * as THREE from 'three';
 import { V3, BEAM_GAIN, BeamArray, PixelStrips, pathLine, pathCircle } from './fixtures.js';
+import { DECK } from './dj.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _v = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -474,18 +475,26 @@ export class Dressing {
       for (let x = 8; x <= 28; x += 2) box(0.08, 0.6, 0.08, side * x, 2.5, 5.3, truss);
     }
     box(56, 0.3, 0.5, 0, 0.15, 5.4, black);
-    // DJ gear on the riser, sized in metres times `human` (the crowd's body scale, 1/WORLD_SCALE) so the table, players
-    // and wedges stay human size on a set built several times life size
-    const RY = 5.6, ZG = -1.3, h = human, screenMat = new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false });
-    box(5.2 * h, 0.9 * h, 1.5 * h, 0, RY + 0.45 * h, ZG, black);                                                   // plinth
-    for (const x of [-1.7 * h, 1.7 * h]) box(0.9 * h, 0.16 * h, 0.7 * h, x, RY + 0.98 * h, ZG, dark);              // CDJs
-    box(1.1 * h, 0.14 * h, 0.7 * h, 0, RY + 0.97 * h, ZG, dark);                                                   // mixer
-    box(0.9 * h, 0.56 * h, 0.06 * h, 0, RY + 1.44 * h, ZG - 0.6 * h, screenMat);                                   // laptop screen
+    // DJ gear on the riser, laid out from `DECK` (shared with dj.js so the DJs' hands land on the players) and built at
+    // stage scale (DECK.SCALE, the set's own 4x) so the DJs and their console read from the field, not just the close-up.
+    this.booth = [];   // every mesh of the console, for the IMAG camera's layer
+    const bbox = (...a) => { const m = box(...a); this.booth.push(m); return m; };
+    const { RY, Z0, TZ, TW, TD, TH, GZ, CDJ_X, JOG_Y, MIX_Y, LAPTOP_Z, WEDGE_X, WEDGE_Z, MAT_Z, MAT_W, MAT_D } = DECK, h = DECK.SCALE;
+    const screenMat = new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false });
+    const tableMat = new THREE.MeshStandardMaterial({ color: 0x15151c, roughness: 0.5, metalness: 0.3 });
+    bbox(TW * h, TH * h, TD * h, 0, RY + TH * 0.5 * h, (Z0 + TZ) * h, tableMat);                                             // table
+    for (const x of [-CDJ_X, CDJ_X]) bbox(0.42 * h, 0.11 * h, 0.42 * h, x * h, RY + (TH + 0.055) * h, (Z0 + GZ) * h, dark);   // players
+    bbox(0.36 * h, 0.09 * h, 0.42 * h, 0, RY + (TH + 0.045) * h, (Z0 + GZ) * h, dark);                                       // mixer
+    bbox(0.36 * h, 0.24 * h, 0.02 * h, 0, RY + (TH + 0.2) * h, (Z0 + LAPTOP_Z) * h, screenMat).rotation.x = 0.25;            // laptop, screen to the DJ
     this.jogs = [];
-    for (const x of [-1.7 * h, 1.7 * h]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.14 * h, 0.24 * h, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x, RY + 1.07 * h, ZG + 0.1 * h); this.group.add(jog); this.jogs.push(jog); }
-    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.44 * h, RY + 1.06 * h, ZG - 0.06 * h), V3(0.44 * h, RY + 1.06 * h, ZG - 0.06 * h), 10), 0.06 * h, { zone: 'mixer' });
-    for (const x of [-3.2 * h, 3.2 * h]) box(1.2 * h, 0.8 * h, 1.0 * h, x, RY + 0.4 * h, ZG + 1.4 * h, black, x < 0 ? 0.5 : -0.5);   // monitor wedges
-    box(6 * h, 0.06 * h, 2.8 * h, 0, RY + 0.03 * h, ZG + 0.2 * h, new THREE.MeshBasicMaterial({ color: 0x101018 }));   // riser mat
+    for (const x of [-CDJ_X, CDJ_X]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.06 * h, 0.10 * h, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x * h, RY + JOG_Y * h, (Z0 + GZ) * h); this.group.add(jog); this.jogs.push(jog); this.booth.push(jog); }
+    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.15 * h, RY + (MIX_Y + 0.015) * h, (Z0 + GZ - 0.08) * h), V3(0.15 * h, RY + (MIX_Y + 0.015) * h, (Z0 + GZ - 0.08) * h), 10), 0.03 * h, { zone: 'mixer' });
+    // the table's front edge carries a pixel line in the show colour, the way a real booth facade is skinned, so the
+    // console reads as a lit desk from the crowd
+    const fz = (Z0 + TZ + TD * 0.5 + 0.02) * h, fy = RY + (TH - 0.06) * h;
+    this.tableLeds = px.addStrip('table', pathLine(V3(-TW * 0.48 * h, fy, fz), V3(TW * 0.48 * h, fy, fz), 24), 0.05 * h, { zone: 'table' });
+    for (const x of [-WEDGE_X, WEDGE_X]) bbox(0.6 * h, 0.45 * h, 0.5 * h, x * h, RY + 0.225 * h, (Z0 + WEDGE_Z) * h, black, x < 0 ? 0.5 : -0.5);   // monitor wedges
+    bbox(MAT_W * h, 0.02 * h, MAT_D * h, 0, RY + 0.01 * h, (Z0 + MAT_Z) * h, new THREE.MeshBasicMaterial({ color: 0x101018 }));   // riser mat
     // food / merch village along both sides of the field
     const nStalls = 26;
     const body = new THREE.InstancedMesh(new THREE.BoxGeometry(5, 2.6, 4), dark, nStalls);
@@ -514,6 +523,7 @@ export class Dressing {
   }
   update(show, px) {
     for (let k = 0; k < this.jogs.length; k++) this.jogs[k].material.color.copy(k ? show.colorB : show.colorA).multiplyScalar(0.8 + 1.5 * show.kick);
+    if (this.tableLeds) for (let i = 0; i < this.tableLeds.count; i++) { const u = i / (this.tableLeds.count - 1); _c.copy(u < 0.5 ? show.colorA : show.colorB).multiplyScalar(0.5 + 1.1 * show.kick + 0.3 * show.energy); px.setPixelC(this.tableLeds.start + i, _c, 1); }
     for (let i = 0; i < this.mixerLeds.count; i++) { const lvl = show.levels ? show.levels[Math.min(7, i)] : 0.5; _c.setRGB(1, 0.3 + 0.7 * (1 - lvl), 0.2).multiplyScalar(0.3 + 1.2 * lvl); px.setPixelC(this.mixerLeds.start + i, _c, 1); }
   }
 }

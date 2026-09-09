@@ -64,6 +64,8 @@ addEventListener('keydown', (e) => {
     const lead = director.setLead(director.nudge + (k === '[' ? -0.01 : 0.01));
     hud.flash(`sync lead ${Math.round(lead * 1000)} ms (${director.nudge >= 0 ? '+' : ''}${Math.round(director.nudge * 1000)})`);
   }
+  else if (k === 'b') { stage.setShot(10); hud.flash('camera 11 booth'); }
+  else if (k === 'i') { stage.triggerImag(); hud.flash('DJ feed on the wings'); }
   else if (k.length === 1 && k >= '0' && k <= '9') { stage.setShot(k === '0' ? 9 : Number(k) - 1); hud.flash('camera ' + k); }
   else if (k === 'escape') document.getElementById('source-menu').hidden = true;
 });
