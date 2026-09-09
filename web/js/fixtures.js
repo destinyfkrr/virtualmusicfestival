@@ -387,6 +387,7 @@ export class Crowd {
       i++;
     }
     geo.setAttribute('aRnd', new THREE.InstancedBufferAttribute(rnd, 3));
+    this.base = base; this.rnd = rnd; this.scale = scale; this.rotY = rotY;   // exposed for flags / wristbands
     this.mesh.frustumCulled = false;
     // phones: bright dots held up by ~15 % of the crowd, animated by the same shader idea
     const pc = Math.floor(count * 0.15);

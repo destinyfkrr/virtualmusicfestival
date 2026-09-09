@@ -15,6 +15,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { V3, BEAM_GAIN, BeamArray, StrobeArray, LaserBank, PixelStrips, LedPanel, Crowd, Particles, pathLine, pathArc, pathRect } from './fixtures.js';
 import { Centrepiece, ORIGIN } from './centrepieces.js';
+import { Festival } from './festival.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
 
@@ -22,10 +23,12 @@ const WHITE = new THREE.Color(1, 1, 1);
 const GREEN = new THREE.Color(0.15, 1, 0.35);
 const frac = (x) => x - Math.floor(x);
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const smooth = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
 const hash = (n) => { let x = Math.imul(n | 0, 374761393); x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; };
 const HI = new Set(['drop', 'peak']);
-const SHOTS = 10;
-const DROP_SHOTS = [0, 3, 5, 8, 4];
+const SHOTS = 13;
+const DROP_SHOTS = [0, 3, 5, 8, 4, 12];
+const ALL_SHOTS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 // ---------------------------------------------------------------- tables
 const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
@@ -100,7 +103,7 @@ export class Stage {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x020209);
     this.scene.fog = new THREE.FogExp2(0x04040c, 0.0045);
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 600);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 900);
     this.camera.position.set(0, 16, 95);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -114,7 +117,7 @@ export class Stage {
     this.autoCam = true; this.shotIndex = 0; this.shotStartBar = 0; this.shotTime = 0; this.shotOrder = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; this.shotPtr = 0;
     this.track = null; this.t = 0; this.textUntil = 0; this.dropBar = -100; this.lastProgPick = -100;
     this.logo = { on: false, at: -1, len: 6, until: 0, since: 0, mode: 'wipe', g0: 0.5, last: -100, mirror: false, image: false, overlayUntil: 0 };
-    this.fx = { flameUntil: 0, sparkUntil: 0 };
+    this.fx = { flameUntil: 0, sparkUntil: 0, waterUntil: 0, fallUntil: 0 };
     this.col = {};
     this.o = { profile: null, track: null, logo: { reveal: 0, mode: 'wipe', glitch: 0, image: false }, variant: 0, white: 0.5, kickHit: false, snareHit: false, hatHit: false, logoImg: null, logoOverlay: 0 };
     this.tmpC = new THREE.Color(); this.tmpC2 = new THREE.Color(); this.tmpV = new THREE.Vector3(); this.tmpV2 = new THREE.Vector3();
@@ -129,6 +132,7 @@ export class Stage {
 
     this._buildWorld();
     this._buildStage();
+    this._buildFestival();
     this._buildRig();
     this._buildPost();
     this.setDensity(this.density);
@@ -254,6 +258,11 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ lighting rig
+  // ---- festival grounds: sky, haze, landscape, rides, towers, flags, wristbands, festoons, gate, dressing
+  _buildFestival() {
+    this.fest = new Festival(this.scene, this.crowd, this.particles, this.mainPanel.mat);
+  }
+
   _buildRig() {
     const s = this.scene;
     // moving heads
@@ -340,7 +349,7 @@ export class Stage {
     };
     for (const k in HEAD_SETS) this.song.headSets[k] = rng.shuffle(HEAD_SETS[k]);
     this.patPtr = {};
-    this.shotOrder = rng.shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); this.shotPtr = 0;
+    this.shotOrder = rng.shuffle(ALL_SHOTS); this.shotPtr = 0;
     for (let i = 0; i < this.heads.n; i++) { this.seedA[i] = rng.range(0, 6.283); this.seedB[i] = rng.range(0, 6.283); this.seedR[i] = rng.next(); }
     const key = profile.centre + '|' + profile.id;
     if (key !== this.centreKey) {
@@ -433,6 +442,10 @@ export class Stage {
         if (bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
         if (bar % 8 === 4 && (s.pyro ?? 0.6) > 0.6) this.particles.firework((Math.random() - 0.5) * 70, 45 + Math.random() * 20, -35, pal[bar % pal.length]);
         if (bar % 16 === 8 && (s.confetti ?? 0.3) > 0.5 && this.rng.chance(s.confetti)) for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 200);
+        if (bar % 8 === 6 && (s.pyro ?? 0.6) > 0.3) for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[(bar + 1) % pal.length], 140);
+        if (bar % 16 === 0 && (s.pyro ?? 0.6) > 0.5 && this.rng.chance(0.7)) this.fx.fallUntil = this.t + 2.2;
+        if (bar % 8 === 2 && (s.pyro ?? 0.6) > 0.3 && this.rng.chance(0.6)) this.fx.waterUntil = this.t + 1.4;
+        if (bar % 16 === 12 && (s.pyro ?? 0.6) > 0.6 && this.rng.chance(0.6)) for (const x of [-30, 30]) this.fest.comet(x, 8, pal[bar % pal.length]);
       }
       if (ph === 'drop' && bar - this.dropBar === 2) this.pickProgram(true, ['wing', 'tower', 'booth', 'top', 'side']);
       if (bar % 4 === 0) this.pickPattern(false);
@@ -459,18 +472,24 @@ export class Stage {
     if (!confirmed) {
       if (pyro > 0.2) for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
       if (pyro > 0.4) this.fx.flameUntil = t + 1.0 + pyro;
+      if (pyro > 0.3) for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[1 % pal.length], 180);
+      if (pyro > 0.5 && this.rng.chance(0.5)) this.fx.waterUntil = t + 1.6;
       return;
     }
     if (pyro > 0.5 && this.rng.chance(0.75)) for (let k = 0; k < 3; k++) setTimeout(() => this.particles.firework((Math.random() - 0.5) * 80, 40 + Math.random() * 25, -30 - Math.random() * 20, pal[k % pal.length]), k * 250);
     if ((s.confetti ?? 0.3) > 0.2 && (sh.dropCount >= 2 || this.rng.chance(0.4)) && this.rng.chance(s.confetti ?? 0.3)) for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 260);
     if (pyro > 0.6) this.fx.sparkUntil = t + 3;
+    if (pyro > 0.5 && this.rng.chance(0.6)) this.fx.fallUntil = t + 2.5;
+    if (pyro > 0.6 && this.rng.chance(0.5)) for (const x of [-30, 30]) this.fest.comet(x, 8, pal[2 % pal.length]);
     if (!this.logo.on && t - this.logo.last > 25 && this.rng.chance((s.logoRate ?? 0.7) * 0.5)) this.showLogo(Math.max(3, (sh.period || 0.5) * 8), this.rng.pick(['flicker', 'scale']), 0.7);
   }
 
   triggerPyro() {
     const pal = this.director.show.palette, t = this.t;
     for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
-    this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3;
+    this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3; this.fx.fallUntil = t + 2.5; this.fx.waterUntil = t + 1.8;
+    for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[1 % pal.length], 180);
+    for (const x of [-30, 30]) this.fest.comet(x, 8, pal[2 % pal.length]);
     for (let k = 0; k < 3; k++) setTimeout(() => this.particles.firework((Math.random() - 0.5) * 80, 40 + Math.random() * 25, -30 - Math.random() * 20, pal[k % pal.length]), k * 250);
     for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 260);
   }
@@ -528,9 +547,9 @@ export class Stage {
     const sh = this.director.show, rng = this.rng;
     let next;
     if (reason === 'drop') next = rng.pick(DROP_SHOTS);
-    else if (reason === 'build') next = rng.pick([5, 4, 0, 8]);
-    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9]);
-    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8]);
+    else if (reason === 'build') next = rng.pick([5, 4, 0, 8, 10]);
+    else if (reason === 'breakdown') next = rng.pick([6, 7, 1, 2, 9, 10, 11]);
+    else if (reason === 'peak') next = rng.pick([0, 3, 6, 9, 8, 12, 10]);
     else next = this.shotOrder[this.shotPtr++ % this.shotOrder.length];
     if (next === this.shotIndex) next = (next + 1) % SHOTS;
     this.shotIndex = next; this.shotStartBar = sh.barIndex; this.shotTime = 0;
@@ -542,6 +561,8 @@ export class Stage {
     if (performance.now() < this.manualUntil) { this.controls.update(); return; }
     this.shotTime += dt;
     const t = this.shotTime, T = Math.min(1, t / 14), v = this.tmpV, look = this.tmpV2.set(0, 11, -6);
+    const fov = this.shotIndex === 10 ? 68 : 55;
+    if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     switch (this.shotIndex) {
       case 0: v.set(Math.sin(t * 0.1) * 6, 16 - 3 * T, 100 - 22 * T); break;
       case 1: v.set(-34 + 14 * T, 3.2, 58 - 12 * T); look.set(4, 14, -6); break;
@@ -553,6 +574,9 @@ export class Stage {
       case 7: v.set(-12 + 24 * Math.abs(Math.sin(t * 0.05)), 2.2 + 0.15 * Math.sin(t * 1.7), 42 - 6 * T); look.set(Math.sin(t * 0.4) * 3, 14, -6); break;
       case 8: v.set(Math.sin(t * 0.15) * 10, 42 - 6 * T, 34 - 8 * T); look.set(0, 8, -8); break;
       case 9: v.set(0, 6.6, -2.6); look.set(Math.sin(t * 0.2) * 14, 8 + Math.sin(t * 0.13) * 3, 60); break;
+      case 10: v.set(Math.sin(t * 0.6) * 0.7, 7.5 + 1.5 * T + 0.12 * Math.sin(t * 2.1), 196 - 30 * T); look.set(0, 15, 0); break;   // walking in through the entrance gate (wide lens)
+      case 11: { const s = smooth(0.3, 0.8, T); v.set(-78 + 30 * T, 20 + 4 * T, 118 - 40 * T); look.set(-108 + 108 * s, 30 - 15 * s, 78 - 78 * s); break; }   // crane: hold on the ferris wheel, pan to the stage
+      case 12: v.set(14 - 4 * T, 2.6 + 0.2 * Math.sin(t * 1.9), 34 - 6 * T); look.set(-4 + 4 * T, 13, -6); break;      // low in the crowd among the flags
       default: v.set(0, 16, 95);
     }
     v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04);
@@ -568,6 +592,7 @@ export class Stage {
     this.density = clamp(+v || 0.7, 0.3, 1.2);
     try { localStorage.setItem('vf.density', String(this.density)); } catch {}
     this.heads.setGain(BEAM_GAIN * (0.7 + 0.3 * this.density));
+    if (this.fest) this.fest.setGain(0.7 + 0.3 * this.density);
     return this.density;
   }
   densityLabel() { const d = this.density; return d < 0.55 ? 'low' : d < 0.85 ? 'med' : d <= 1.02 ? 'high' : 'max'; }
@@ -590,6 +615,7 @@ export class Stage {
       if (this.centre.lasers) this._driveLasers(this.centre.lasers, show, 0.9);
     }
     this.crowd.update(show);
+    this.fest.update(show, dt, this.levels);
     this._updateFx(show, dt);
     this._updateCamera(dt, show);
     this._updateWorld(show, dt);
@@ -780,6 +806,9 @@ export class Stage {
     const t = this.t, pr = this.particles;
     if (t < this.fx.flameUntil) for (const x of FLAME_X) pr.flame(x, 2.4, 5.2, 1.1, 8);
     if (t < this.fx.sparkUntil) for (const x of SPARK_X) pr.sparkular(x, 2.4, 4.2, 3, 1.2);
+    if (t < this.fx.waterUntil) this.fest.water(3);
+    if (t < this.fx.fallUntil) this.fest.waterfall(2);
+    if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const x of [-34, 34]) pr.flame(x, 16.8, 52, 1.3, 6);
     pr.update(dt);
   }
 
