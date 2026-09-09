@@ -1,12 +1,13 @@
 # Virtual-Fest — Spotify-reactive virtual festival
 
 A Tomorrowland / Ultra style festival rendered in the browser (three.js): a main stage whose LED
-walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames and cold sparks
-react in real time to whatever your Mac's Spotify app is playing — beat-grid locked, with a
+walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames, cold sparks and
+fireworks react in real time to whatever your Mac's Spotify app is playing — beat-grid locked, with a
 per-artist stage design, a per-song colour theme and the artist's real logo on the screens —
 set in full festival grounds (crowd, lighting towers, ferris wheel, drop tower, entrance gate,
 festoons, sky). The set is built four times life size around a human-scale crowd, the way the
-big festival main stages dwarf the field in front of them, and every camera stays on the stage.
+big festival main stages dwarf the field in front of them, the DJ (or duo / trio) plays the set in
+the booth, and every camera stays on the stage.
 
 Audio is captured with a macOS Core Audio *process tap* (macOS 14.2+), so no virtual audio
 driver (BlackHole etc.) is needed and Spotify keeps playing through your speakers.
@@ -50,8 +51,10 @@ Press **S** (or the *Source* button):
 | F | Fullscreen |
 | C | Cut to the next camera shot (auto-cam resumes ~25 s after you drag) |
 | 1–9, 0 | Camera 1–10, all framed on the stage: wide, front L, front R, side, close, low, arc, raking, top, centrepiece |
+| B | Camera 11: the DJ booth close-up |
+| I | Put the live DJ feed (IMAG) on the side screens now, for 8 bars |
 | L | Show the artist's logo / mark on the walls now |
-| P | Fire pyro (CO2 jets, flames, cold-spark fountains) |
+| P | Fire pyro (CO2 jets, flames, cold-spark fountains and a fireworks salvo over the set) |
 | D | Force a drop on the next beat |
 | - / = | Fewer / more beams and lasers (the *Lights* button cycles low → med → high) |
 | [ / ] | Nudge sync lead −/+10 ms (if hits feel late/early) |
@@ -102,21 +105,28 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   volumetric beams), `StrobeArray`, `LaserBank`, `PixelStrips`, `LedPanel`, `Crowd`,
   `Particles`.
 - `web/js/stage.js` — the set, built 4x life size: ~210 moving heads, ~165 strobes/blinders,
-  31 laser sources (~235 beams), thousands of architectural pixels (arches, trusses, towers,
-  frames, runway) plus the centrepiece, the 18k crowd with phone lights, bloom, and the
-  camera director (10 shots, drop cuts on the downbeat). Every shot frames the stage: there is
-  no crowd-only, gate or DJ-point-of-view camera, the grounds are only ever the backdrop.
-  Nothing stands in the crowd: no FOH
-  platform or delay towers, so every shot from the field sees the whole stage. The rig is deliberately a
-  third smaller than this project's first cut: the beams and fans frame the stage, the
-  screens and the centrepiece instead of replacing them. The air in front of the stage is kept
-  clear as well: pyro is CO2, flames and cold sparks on the drop only, and there is no confetti,
-  no fireworks, no water curtain and no haze sprite floating over the field, so nothing hangs
-  between the camera and the set. The *Lights* density scales
+  16 laser sources (~80 beams), thousands of architectural pixels (arches, trusses, towers,
+  frames, runway) plus the centrepiece, the 20k crowd packed into the front of the field with
+  phone lights, bloom, and the camera director (11 shots, drop cuts on the downbeat). Every
+  shot frames the stage: there is no crowd-only, gate or DJ-point-of-view camera, the grounds
+  are only ever the backdrop. Nothing stands in the crowd: no FOH platform or delay towers, so
+  every shot from the field sees the whole stage. The rig is deliberately smaller than this
+  project's first cut (heads and strobes a third fewer, lasers halved twice): the beams and
+  fans frame the stage, the screens and the centrepiece instead of replacing them, and a drop
+  never hides the stage behind a laser web. The air in front of the stage is kept clear as
+  well: deck pyro is CO2, flames and cold sparks on the drop only, and the fireworks
+  (`web/js/fireworks.js`: peonies, chrysanthemums, willows, rings, palms, crossettes and
+  glitter shells in the song's colours) are launched from behind the set and burst above the
+  roof line, on the drop, mid-phrase through the drop and the peak, and as a finale through
+  the last half minute of the track, so nothing ever hangs between the camera and the set. There
+  is no confetti, no water curtain and no haze sprite over the field. The *Lights* density scales
   how many beams and lasers are up at once and how bright they are, so the stage always stays visible.
   Lasers are run the way a laser operator runs them: the projectors on one truss share a
-  look (mirrored fans, one phase running along the truss) and only one to three of the six
-  laser groups fire at once, so a drop is a few big coherent fans instead of a web of lines,
+  look (mirrored fans, one phase running along the truss), each projector throws four to six
+  beams, only one or two of the six laser groups fire at once, drops run them at reduced opacity,
+  and a projector fades by up to three quarters by how squarely its fan faces the camera (a fan
+  aimed into the lens is the one that hides the stage), so a drop is a few big coherent fans
+  instead of a web of lines,
   and every laser is a pure saturated hue no matter what the LED palette is doing. Moving-head
   beams are narrow and fade along their length like beams in real haze, so a sky full of them
   stays a sky full of rays rather than a wash. On top of that an auto-iris does what a
@@ -129,7 +139,20 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   lighting towers with pixel edges and level meters, six perimeter skytrackers, wristbands
   that pulse with the show, festoon strings over the field, the entrance gate with its pixel-outlined VIRTUAL-FEST sign, a lit
   cobble path with bollards and lamp posts, stage-colour light spill on the grass, and the
-  stage dressing (PA hangs, subs, side screens, flame bars).
+  stage dressing (PA hangs, subs, side screens, flame bars) and the DJ booth, built at stage
+  scale so it reads from the field: a lit console (players, mixer, laptop, monitor wedges) and
+  the DJ — `web/js/dj.js`, a duo or trio for acts like W&W or Dimitri Vegas & Like Mike —
+  who plays the set to the beat grid: heads nodding and cueing in the groove, both hands up
+  through the build, jumping and pumping fists on the drop, mixing and waving on the peak,
+  hands on the players through the breakdown. Camera 11 (key **B**) sits in the booth, a few
+  metres from the act. The figures carry broadcast lighting in their own shader (a Fresnel rim
+  in the show's second colour and a soft camera-facing fill in the booth's light), so a DJ in a
+  black tee never reads as a silhouette against the riser. The side screens carry an IMAG feed
+  the way a festival's do: a second camera in the booth renders the act, the console and the
+  walls behind them into a small render target every other frame, and the wings cut to it a
+  phrase at a time (most in the groove, the build and the breakdown, a short cut a couple of
+  bars into a drop, never over a logo or a text card), changing angle every four bars, with a
+  duo or trio framed from further back. Key **I** puts the feed up now.
 
 ## Debugging
 

@@ -65,16 +65,19 @@ const laserColor = (out, ...cols) => {
   for (const c of cols) { c.getHSL(_hsl, THREE.SRGBColorSpace); if (_hsl.s >= 0.3 && _hsl.l >= 0.12 && _hsl.l <= 0.8) return out.setHSL(_hsl.h, 1, 0.5, THREE.SRGBColorSpace); }
   cols[0].getHSL(_hsl, THREE.SRGBColorSpace); return out.setHSL(_hsl.h, 1, 0.5, THREE.SRGBColorSpace);
 };
-const _lzA = new THREE.Color(), _lzC = new THREE.Color();
+const _lzA = new THREE.Color(), _lzC = new THREE.Color(), _camL = new THREE.Vector3();
 
 // ---------------------------------------------------------------- tables
 const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
 const LASER_GROUPS = 6; // back truss, front truss, towers, wings, deck, arch cones
 // The set, rig, centrepiece and grounds are authored in "site" units and live in a group scaled WORLD_SCALE times, so the
-// stage stands 4x life size; the crowd is built at 1/WORLD_SCALE inside it so people stay human. The camera and lights
+// stage stands 4x life size; the crowd is built near 1/WORLD_SCALE inside it so people stay human. The camera and lights
 // work in world units, hence the point-light compensation (three.js point lights fall off as 1/d^decay, decay 1.8).
 const WORLD_SCALE = 4;
 const LIGHT_K = Math.pow(WORLD_SCALE, 1.8);
+// crowd bodies: a fifth over human scale (1.2 / WORLD_SCALE) and packed into the front of the field, so the field reads
+// as a crowd from the stage shots instead of a scatter of dots, while the set still towers over it.
+const CROWD_SCALE = 1.2 / WORLD_SCALE;
 const DENSITY_PRESETS = [['low', 0.45], ['med', 0.7], ['high', 1.0]];
 const HEAD_SETS = {
   idle: ['slowSweep', 'skySearch'],
@@ -214,7 +217,7 @@ export class Stage {
     s.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.1 * WORLD_SCALE, fog: false })));
     this.washLights = [[-26, 14, 32], [0, 16, 44], [26, 14, 32]].map(p => { const l = new THREE.PointLight(0xffffff, 0, 90 * WORLD_SCALE, 1.8); l.position.set(p[0], p[1], p[2]); b.add(l); return l; });
     this.stageLight = new THREE.PointLight(0xffffff, 4 * LIGHT_K, 50 * WORLD_SCALE, 1.8); this.stageLight.position.set(0, 14, 4); b.add(this.stageLight);
-    this.crowd = new Crowd(18000, 1 / WORLD_SCALE); b.add(this.crowd.mesh); if (this.crowd.phones) b.add(this.crowd.phones);
+    this.crowd = new Crowd(20000, CROWD_SCALE); b.add(this.crowd.mesh); if (this.crowd.phones) b.add(this.crowd.phones);
     this.particles = new Particles(16000); this.particles.sizeK = WORLD_SCALE; b.add(this.particles.points);
     this.fw = new Fireworks(this.particles);   // shells fired from behind the set, bursting over the roof line
   }
@@ -375,15 +378,17 @@ export class Stage {
     // sides, the seed is a phase that progresses along the truss, and key pairs the mirrored projectors for the random
     // picks - so a truss throws a wave of fans rather than a web of independently aimed lines.
     const laser = (x, y, z, beams, o, grp) => { L.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: 0, key: grp * 100 + Math.round(Math.abs(x)) } }, o)); li++; };
-    // 31 projectors (a third fewer than the first cut): the fans read as a few big shapes over the stage, never a web.
-    for (let i = 0; i < 8; i++) laser(-28 + i * 8, 28.6, -7.5, 8, { pitch: -0.05 }, 0);
-    for (let i = 0; i < 6; i++) laser(-31.5 + i * 12.6, 26.2, 6.4, 8, { pitch: -0.08 }, 1);
+    // 16 projectors (half of the 31 of the previous cut, a third of the first) throwing 4-6 beams each (~80 beams, a
+    // third of the previous cut): the fans read as a few big shapes over the stage, never a web, and the stage stays
+    // visible through a drop.
+    for (let i = 0; i < 4; i++) laser(-24 + i * 16, 28.6, -7.5, 5, { pitch: -0.05 }, 0);
+    for (let i = 0; i < 3; i++) laser(-25.2 + i * 25.2, 26.2, 6.4, 5, { pitch: -0.08 }, 1);
     for (const side of [-1, 1]) {
-      for (const y of [8, 17, 26]) laser(side * 46.6, y, 1, 7, { yaw: -side * 0.4 }, 2);
-      for (const x of [29, 35]) laser(side * x, 22, -6.3, 6, { yaw: -side * 0.2, pitch: 0.05 }, 3);
+      laser(side * 46.6, 17, 1, 5, { yaw: -side * 0.4 }, 2);
+      laser(side * 32, 22, -6.3, 4, { yaw: -side * 0.2, pitch: 0.05 }, 3);
     }
-    for (let i = 0; i < 4; i++) laser(-24 + i * 16, 2.6, -9.5, 8, { pitch: 0.35 }, 4);
-    for (let i = 0; i < 3; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 2; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
+    for (const x of [-12, 12]) laser(x, 2.6, -9.5, 5, { pitch: 0.35 }, 4);
+    for (let i = 0; i < 3; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 2; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 6, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
     const reach = {};
     for (const src of L.sources) reach[src.meta.grp] = Math.max(reach[src.meta.grp] || 0, Math.abs(src.pos.x));
     for (const src of L.sources) { const m = src.meta; m.u = reach[m.grp] > 0 ? Math.abs(src.pos.x) / reach[m.grp] : 0.5; m.seed = hash(m.grp * 77 + 5) * 6.283 + m.u * 1.4; }
@@ -864,11 +869,12 @@ export class Stage {
     const t = show.t, ph = show.phase, s = this.style, kick = show.kick, bp = clamp(show.beatPhase, 0, 1), pat = this.laserPat, lz = s.lasers ?? 0.6;
     const dip = show.dip || 0, dens = this.density, bar = show.barIndex | 0, dt = show.dt || 0.016;
     // Duty cycling: projectors are split into LASER_GROUPS groups and only a rotating window of them fires at once
-    // (window size follows the density setting), so single fans and the stage behind them stay readable.
-    const grpMax = dens < 0.55 ? 1 : dens < 0.85 ? 2 : dens <= 1.02 ? 3 : 4;
+    // (window size follows the density setting: one group at low / medium, two at the default, three at high), so single
+    // fans and the stage behind them stay readable.
+    const grpMax = dens < 0.85 ? 1 : dens <= 1.02 ? 2 : 3;
     const rank = this.song.laserRank, rot = this.song.laserRot | 0;
     let op = 0, win = -1, key = 0;   // win < 0 => all groups
-    if (ph === 'drop') { if (show.phaseBars < 2) op = 0.62; else { op = 0.78; win = grpMax; key = (bar >> 1) + rot; } }
+    if (ph === 'drop') { if (show.phaseBars < 2) op = 0.5; else { op = 0.64; win = grpMax; key = (bar >> 1) + rot; } }
     else if (ph === 'peak') { op = 0.45 + 0.25 * show.beatPulse; win = grpMax; key = bar + rot; }
     else if (ph === 'build') { const p = show.buildProgress; op = Math.max(0, p - 0.45) * 0.9 + (show.predrop ? 0.35 : 0); win = 1 + Math.floor(p * grpMax); key = rot; }
     else if (ph === 'groove' && this.song.grooveLasers) { op = 0.16 + 0.22 * kick; win = 1; key = (bar >> 2) + rot; }
@@ -880,6 +886,9 @@ export class Stage {
     lzA.getHSL(_hsl, THREE.SRGBColorSpace); const hA = _hsl.h; lzC.getHSL(_hsl, THREE.SRGBColorSpace);
     const same = Math.abs(frac(hA - _hsl.h + 0.5) - 0.5) < 0.06;
     const srcs = bank.sources, n = srcs.length, ease = Math.min(1, dt * 14);
+    // the camera in the bank's own space: a fan aimed into the lens is the one that hides the stage, so the opacity of
+    // a projector is cut by up to 75% by how squarely it faces the camera (the way a laser op keeps fans off the cameras)
+    const cam = bank.mesh.worldToLocal(_camL.copy(this.camera.position));
     for (let i = 0; i < n; i++) {
       const L = srcs[i], m = L.meta || (L.meta = {}), u = m.u ?? (n > 1 ? i / (n - 1) : 0.5), side = m.side ?? (u < 0.5 ? -1 : 1), sd = m.seed ?? i, key = m.key ?? i;
       if (m.yaw0 === undefined) { m.yaw0 = L.yaw; m.pitch0 = L.pitch; m.opS = 0; }
@@ -900,7 +909,10 @@ export class Stage {
       if (L.mode === 'cone') spread = Math.min(spread, 0.7);
       L.yaw = yaw; L.pitch = pitch; L.spread = spread; L.roll = roll;
       m.opS += ((gOn ? op : 0) - m.opS) * ease;
-      L.op = m.opS * (pat === 'kick' ? 0.5 + 0.5 * kick : 1);
+      const cpF = Math.cos(pitch), fx = Math.sin(yaw) * cpF, fy = Math.sin(pitch), fz = Math.cos(yaw) * cpF;
+      const tx = cam.x - L.pos.x, ty = cam.y - L.pos.y, tz = cam.z - L.pos.z, tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
+      const face = clamp(((fx * tx + fy * ty + fz * tz) / tl - 0.2) / 0.45, 0, 1);
+      L.op = m.opS * (pat === 'kick' ? 0.5 + 0.5 * kick : 1) * (1 - 0.75 * face);
       if (rainbow) c.setHSL(frac(t * 0.08 + u * 0.6 + (i & 1) * 0.3), 1, 0.55);
       else if (classic) c.copy((i & 1) ? GREEN : lzA).lerp(WHITE, 0.03);
       else { c.copy((i & 1) === 0 ? lzC : lzA).lerp(WHITE, 0.02); if (same && (i & 1) === 0) c.offsetHSL(0.1, 0, 0); }

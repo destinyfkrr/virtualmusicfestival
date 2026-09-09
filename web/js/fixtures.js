@@ -377,8 +377,8 @@ export class Crowd {
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     let i = 0;
     while (i < count) {
-      const z = 9 + Math.pow(Math.random(), 1.7) * 110;   // front-heavy, like a real field (the cameras only ever see the front half)
-      const halfW = 22 + z * 0.55;
+      const z = 8 + Math.pow(Math.random(), 1.5) * 72;    // front-heavy and packed: the field the cameras see is the front 70 site units
+      const halfW = 30 + z * 0.5;
       const x = (Math.random() * 2 - 1) * halfW;
       if (Math.abs(x) < 6 && z < 12) continue; // gap at the barrier
       base[i * 3] = x; base[i * 3 + 2] = z;
