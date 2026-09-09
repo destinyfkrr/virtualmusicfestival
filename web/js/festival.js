@@ -4,12 +4,11 @@
 //   Landscape    hills + treeline silhouettes + lit trees framing the arena
 //   FerrisWheel  rotating wheel with its own pixel rim/spokes (rainbow chase, beat flashes)
 //   DropTower    drop-tower ride: rises during builds, free-falls on the drop
-//   Towers       FOH platform with followspots, crowd lighting towers, perimeter skytrackers
-//   Flags        waving crowd flags on poles (vertex-shader cloth, bob with the crowd)
+//   Towers       crowd lighting towers, perimeter skytrackers
 //   Wristbands   LED wristbands on half the crowd: waves, chases, kick flashes, drop whiteouts
 //   Festoons     catenary bulb strings + bunting across the field
 //   Gate         entrance arch at the back of the field with a VIRTUAL-FEST sign
-//   Dressing     PA hangs, sub stacks, rails, stairs, DJ gear, delay-tower screens, food stalls
+//   Dressing     PA hangs, sub stacks, rails, stairs, DJ gear (human scale inside the 2x set), food stalls
 // All of it is instanced or shader-driven; the per-frame CPU work is a few thousand colour writes.
 import * as THREE from 'three';
 import { V3, BEAM_GAIN, BeamArray, PixelStrips, pathLine, pathCircle } from './fixtures.js';
@@ -306,7 +305,7 @@ export class DropTower {
   }
 }
 
-// ---------------------------------------------------------------- towers: FOH, crowd lighting towers, skytrackers
+// ---------------------------------------------------------------- towers: crowd lighting towers, skytrackers
 export class Towers {
   constructor(px) {
     this.group = new THREE.Group();
@@ -328,19 +327,6 @@ export class Towers {
     };
     this.heads = new BeamArray();
     this.sky = new BeamArray();
-    // FOH platform in the crowd
-    scaffold(0, 64, 11, 7, 6.5);
-    box(11.5, 0.35, 7.5, 0, 6.6, 64, truss);
-    box(12.5, 0.3, 8.5, 0, 10.4, 64);                           // roof tarp
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) pole(sx * 5.5, 6.6, 64 + sz * 3.5, sx * 5.5, 10.3, 64 + sz * 3.5, 0.08);
-    box(1.4, 0.9, 0.4, -6, 7.4, 60.6); box(1.4, 0.9, 0.4, 6, 7.4, 60.6);          // rail posts
-    this.consoles = [];
-    for (const x of [-3.2, 0, 3.2]) {
-      box(2.6, 0.9, 1.2, x, 7.25, 62.6);
-      const scr = box(2.2, 0.55, 0.06, x, 7.95, 62.05, new THREE.MeshBasicMaterial({ color: 0x224466, toneMapped: false }));
-      scr.rotation.x = -0.35; this.consoles.push(scr);
-    }
-    this.follow = [this.heads.add(V3(-4.2, 7.9, 61.5), { kind: 'follow' }), this.heads.add(V3(4.2, 7.9, 61.5), { kind: 'follow' })];
     // crowd lighting towers
     this.ctowers = [];
     for (const [x, z] of [[-57, 36], [57, 36], [-69, 82], [69, 82]]) {
@@ -358,7 +344,6 @@ export class Towers {
     spots.forEach(([x, z], i) => { box(3, 1.2, 3, x, 0.6, z, truss); this.skyIds.push(this.sky.add(V3(x, 1.5, z), { i })); });
     this.group.add(this.heads.build(), this.sky.build());
     for (let i = 0; i < this.sky.n; i++) { this.sky.len[i] = 2.6; this.sky.speed[i] = 1.2; }
-    for (const i of this.follow) { this.heads.speed[i] = 6; }
     this.heads.setGain(BEAM_GAIN * 0.9); this.sky.setGain(BEAM_GAIN * 0.55);
     this.beamsK = 1;
   }
@@ -366,12 +351,6 @@ export class Towers {
   update(show, dt) {
     const ph = show.phase, hi = ph === 'drop' || ph === 'peak', t = show.t;
     const H = this.heads, S = this.sky;
-    // followspots track the DJ (with a little operator wobble)
-    for (const i of this.follow) {
-      H.setGoal(i, Math.sin(t * 0.7 + i) * 0.6, 5.2 + Math.sin(t * 0.5) * 0.3, -2.6);
-      H.inten[i] = show.active ? (ph === 'breakdown' ? 0.9 : hi ? 0.35 : 0.6) * (1 - 0.8 * (show.dip || 0)) : 0.2;
-      H.setRGB(i, 1, 0.96, 0.9);
-    }
     // crowd towers: slow crowd sweeps, kicked up in drops, dark in dips/breakdowns
     for (const tw of this.ctowers) {
       tw.ids.forEach((id, k) => {
@@ -394,54 +373,6 @@ export class Towers {
       if (hi) S.setColor(i, i & 1 ? show.colorA : show.colorB, 1); else S.setRGB(i, 0.85, 0.9, 1);
     }
     H.update(dt, t); S.update(dt, t);
-    for (let k = 0; k < this.consoles.length; k++) this.consoles[k].material.color.setRGB(0.2 + 0.4 * show.levels?.[k * 2] || 0.2, 0.35, 0.6);
-  }
-}
-
-// ---------------------------------------------------------------- flags (waving cloth on poles, bobbing with the crowd)
-export class Flags {
-  constructor(crowd, n = 260) {
-    this.group = new THREE.Group();
-    const geo = new THREE.PlaneGeometry(1.8, 1.15, 10, 4); geo.translate(0.9, -0.58, 0);
-    const rnd = new Float32Array(n * 3);
-    this.mat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-    this.mat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, { uT: crowd.uT, uJump: crowd.uJump, uBounce: crowd.uBounce, uBar: crowd.uBar });
-      sh.vertexShader = `attribute vec3 aRnd; uniform float uT, uJump, uBounce, uBar;\n` + sh.vertexShader.replace('#include <begin_vertex>', /* glsl */`
-        #include <begin_vertex>
-        {
-          float ph = aRnd.x; float w = position.x / 1.8;
-          transformed.z += sin(position.x * 3.5 - uT * 5.5 + ph) * 0.22 * w + sin(position.y * 6.0 + uT * 3.0 + ph) * 0.05 * w;
-          transformed.y += sin(position.x * 2.2 - uT * 4.0 + ph * 1.3) * 0.07 * w;
-          transformed.y += aRnd.y * uJump * uBounce * (0.4 + 0.6 * abs(sin(ph + uBar)));
-        }`);
-    };
-    this.mesh = new THREE.InstancedMesh(geo, this.mat, n);
-    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-    const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 5); poleGeo.translate(0, 0.5, 0);
-    this.poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshBasicMaterial({ color: 0x2a2a30 }), n);
-    const base = crowd.base, cr = crowd.rnd, scale = crowd.scale;
-    const hues = [0.0, 0.08, 0.15, 0.33, 0.5, 0.58, 0.66, 0.75, 0.85, 0.95];
-    for (let k = 0; k < n; k++) {
-      let j = Math.floor(Math.random() * crowd.count);
-      for (let tries = 0; tries < 20 && Math.abs(base[j * 3] - 12) < 5 && Math.abs(base[j * 3 + 2] - 30) < 7; tries++) j = Math.floor(Math.random() * crowd.count);   // shot 12 corridor
-      const x = base[j * 3] + 0.3, z = base[j * 3 + 2], H = 3.4 + Math.random() * 2.2;
-      rnd[k * 3] = cr[j * 3]; rnd[k * 3 + 1] = cr[j * 3 + 1]; rnd[k * 3 + 2] = Math.random();
-      _e.set(0, Math.random() * 6.28, 0); _q.setFromEuler(_e);
-      _m.compose(_v.set(x, H, z), _q, _s.set(1, 1, 1)); this.mesh.setMatrixAt(k, _m);
-      _m.compose(_v.set(x, 0, z), _q.identity(), _s.set(1, H, 1)); this.poles.setMatrixAt(k, _m);
-      const r = Math.random();
-      if (r < 0.2) _c.setRGB(1, 1, 1); else if (r < 0.3) _c.setRGB(0.28, 0.3, 0.45); else _c.setHSL(hues[Math.floor(Math.random() * hues.length)], 0.85, 0.5);
-      this.mesh.setColorAt(k, _c);
-    }
-    geo.setAttribute('aRnd', new THREE.InstancedBufferAttribute(rnd, 3));
-    this.mesh.frustumCulled = false; this.poles.frustumCulled = false;
-    this.group.add(this.mesh, this.poles);
-  }
-  update(show) {
-    const ph = show.phase;
-    const lit = (ph === 'idle' ? 0.35 : 0.45) + 0.5 * show.energy + 0.4 * show.strobe + 0.8 * show.whiteout;
-    this.mat.color.setRGB(1, 1, 1).lerp(show.colorA, 0.25).multiplyScalar(clamp(lit, 0.3, 1.5) * (1 - 0.5 * (show.dip || 0)));
   }
 }
 
@@ -467,12 +398,12 @@ export class Wristbands {
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.zn = new Float32Array(n); this.xn = new Float32Array(n); this.ph = new Float32Array(n); this.d = new Float32Array(n);
-    const base = crowd.base, cr = crowd.rnd, scale = crowd.scale;
+    const base = crowd.base, cr = crowd.rnd, scale = crowd.scale, bs = crowd.bodyScale ?? 1;
     for (let k = 0; k < n; k++) {
       const j = Math.floor(Math.random() * crowd.count);
       const x = base[j * 3], z = base[j * 3 + 2];
       rnd[k * 3] = cr[j * 3]; rnd[k * 3 + 1] = cr[j * 3 + 1]; rnd[k * 3 + 2] = Math.random();
-      _m.makeTranslation(x - 0.34, 1.35 * scale[j], z + 0.12); this.mesh.setMatrixAt(k, _m);
+      _m.compose(_v.set(x - 0.34 * bs, 1.35 * scale[j], z + 0.12 * bs), _q.identity(), _s.set(bs, bs, bs)); this.mesh.setMatrixAt(k, _m);
       this.zn[k] = clamp((z - 9) / 110, 0, 1); this.xn[k] = clamp(x / halfW(z), -1, 1); this.ph[k] = Math.random() * 6.28;
       this.d[k] = Math.hypot(x, z + 8) / 130;
     }
@@ -519,11 +450,10 @@ export class Festoons {
   constructor(px) {
     this.group = new THREE.Group();
     const spans = [
-      [V3(-44, 29, 2), V3(-34, 15.8, 50), 5], [V3(44, 29, 2), V3(34, 15.8, 50), 5],
-      [V3(-34, 15.8, 52), V3(-57, 15.2, 36), 3], [V3(34, 15.8, 52), V3(57, 15.2, 36), 3],
+      [V3(-44, 29, 2), V3(-57, 15.2, 36), 5], [V3(44, 29, 2), V3(57, 15.2, 36), 5],
       [V3(-57, 15.2, 36), V3(-69, 15.2, 82), 4], [V3(57, 15.2, 36), V3(69, 15.2, 82), 4],
       [V3(-69, 15.2, 82), V3(69, 15.2, 82), 7],
-      [V3(-34, 15.8, 54), V3(-30, 26, 126), 6], [V3(34, 15.8, 54), V3(30, 26, 126), 6],
+      [V3(-57, 15.2, 38), V3(-30, 26, 126), 6], [V3(57, 15.2, 38), V3(30, 26, 126), 6],
       [V3(-69, 15.2, 84), V3(-30, 26, 128), 5], [V3(69, 15.2, 84), V3(30, 26, 128), 5],
     ];
     const linePts = [];
@@ -534,7 +464,7 @@ export class Festoons {
       const pts = catenary(a, b, sag, n);
       for (let i = 0; i < n - 1; i++) linePts.push(pts[i], pts[i + 1]);
       const bulbPts = pts.filter((_, i) => i % 2 === 0).map(p => p.clone().add(_v.set(0, -0.35, 0)));
-      this.bulbs.push(px.addStrip('festoon', bulbPts, 0.3, { zone: 'festoon' }));
+      this.bulbs.push(px.addStrip('festoon', bulbPts, 0.2, { zone: 'festoon' }));
       for (let i = 1; i < n - 1; i += 2) buntPos.push(pts[i]);
     }
     const lg = new THREE.BufferGeometry().setFromPoints(linePts);
@@ -548,7 +478,7 @@ export class Festoons {
     this.bunt.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(buntPos.length * 3), 3);
     buntPos.forEach((p, i) => {
       _e.set(0, Math.random() * 6.28, 0); _q.setFromEuler(_e);
-      _m.compose(p, _q, _s.set(1, 1, 1)); this.bunt.setMatrixAt(i, _m);
+      _m.compose(p, _q, _s.set(0.55, 0.55, 1)); this.bunt.setMatrixAt(i, _m);
       _c.setHSL(Math.random(), 0.9, 0.55); this.bunt.setColorAt(i, _c);
     });
     this.bunt.frustumCulled = false;
@@ -629,33 +559,27 @@ export class Dressing {
       // hang bumper + chains
       box(1.8, 0.3, 1.4, side * 25.5, 24.1, 7.2, truss);
       // side stairs
-      for (let k = 0; k < 6; k++) box(3, 0.38, 1.2, side * (30 + k * 0.9), 0.19 + k * 0.38, 7.5 - k * 0.0, dark);
+      for (let k = 0; k < 12; k++) box(3, 0.19, 0.6, side * (30 + k * 0.45), 0.095 + k * 0.19, 7.5, dark);
     }
     this.group.add(pa);
     // deck rails (leaving the runway gap) + skirt
     for (const side of [-1, 1]) {
-      const rail = (y) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 20, 6).rotateZ(Math.PI / 2), truss); m.position.set(side * 18, y, 5.3); this.group.add(m); };
-      rail(3.0); rail(3.6);
-      for (let x = 8; x <= 28; x += 4) box(0.12, 1.4, 0.12, side * x, 2.95, 5.3, truss);
+      const rail = (y) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 20, 6).rotateZ(Math.PI / 2), truss); m.position.set(side * 18, y, 5.3); this.group.add(m); };
+      rail(2.5); rail(2.8);
+      for (let x = 8; x <= 28; x += 2) box(0.08, 0.6, 0.08, side * x, 2.5, 5.3, truss);
     }
     box(56, 0.3, 0.5, 0, 0.15, 5.4, black);
-    // DJ gear on the riser
-    const table = box(5.2, 0.16, 1.5, 0, 5.7, -1.3, black);
-    for (const x of [-1.7, 1.7]) { box(0.9, 0.16, 0.7, x, 5.86, -1.3, dark); }
-    box(1.1, 0.14, 0.7, 0, 5.85, -1.3, dark);
-    box(0.9, 0.55, 0.05, 0, 6.2, -1.9, new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false }));
+    // DJ gear on the riser - human scale (the site is built 2x life size, so a 0.9 m-high table is 0.45 here)
+    const RY = 5.6, screenMat = new THREE.MeshBasicMaterial({ color: 0x334455, toneMapped: false });
+    box(2.6, 0.45, 0.75, 0, RY + 0.225, -1.3, black);                                                 // plinth
+    for (const x of [-0.85, 0.85]) box(0.45, 0.08, 0.35, x, RY + 0.49, -1.3, dark);                    // CDJs
+    box(0.55, 0.07, 0.35, 0, RY + 0.485, -1.3, dark);                                                 // mixer
+    box(0.45, 0.28, 0.03, 0, RY + 0.72, -1.6, screenMat);                                             // laptop screen
     this.jogs = [];
-    for (const x of [-1.7, 1.7]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.14, 0.24, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x, 5.95, -1.2); this.group.add(jog); this.jogs.push(jog); }
-    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.45, 5.94, -1.35), V3(0.45, 5.94, -1.35), 10), 0.06, { zone: 'mixer' });
-    for (const x of [-3.2, 3.2]) box(1.2, 0.8, 1.0, x, 5.2, -0.4, black, x < 0 ? 0.5 : -0.5);   // monitor wedges
-    box(6, 0.05, 2.2, 0, 4.63, -1.0, new THREE.MeshBasicMaterial({ color: 0x101018 }));             // riser mat
-    // delay-tower screens (mirror the main LED wall; face the back of the field)
-    for (const x of [-34, 34]) {
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(11, 5.5), mainMat); scr.position.set(x, 19.9, 52.4); this.group.add(scr);
-      box(12, 6.5, 0.6, x, 19.9, 51.9, dark);
-      for (const ox of [-5.2, 5.2]) box(0.3, 7, 0.3, x + ox, 19.9, 51.6, truss);
-      box(6, 1.6, 2.4, x, 17.4, 52, black);
-    }
+    for (const x of [-0.85, 0.85]) { const jog = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.12, 24), new THREE.MeshBasicMaterial({ color: 0xff0000, toneMapped: false, side: THREE.DoubleSide })); jog.rotation.x = -Math.PI / 2; jog.position.set(x, RY + 0.535, -1.25); this.group.add(jog); this.jogs.push(jog); }
+    this.mixerLeds = px.addStrip('mixer', pathLine(V3(-0.22, RY + 0.53, -1.33), V3(0.22, RY + 0.53, -1.33), 10), 0.03, { zone: 'mixer' });
+    for (const x of [-1.6, 1.6]) box(0.6, 0.4, 0.5, x, RY + 0.2, -0.6, black, x < 0 ? 0.5 : -0.5);    // monitor wedges
+    box(3, 0.03, 1.4, 0, RY + 0.015, -1.2, new THREE.MeshBasicMaterial({ color: 0x101018 }));         // riser mat
     // food / merch village along both sides of the field
     const nStalls = 26;
     const body = new THREE.InstancedMesh(new THREE.BoxGeometry(5, 2.6, 4), dark, nStalls);
@@ -675,8 +599,8 @@ export class Dressing {
     }
     this.group.add(body, roof, this.stallLight);
     // portaloos + fence lines behind the village (tiny but they sell the site)
-    const loo = new THREE.InstancedMesh(new THREE.BoxGeometry(1.1, 2.3, 1.1), new THREE.MeshLambertMaterial({ color: 0x1c3a5a }), 40);
-    for (let i = 0; i < 40; i++) { const side = i < 20 ? -1 : 1, z = 40 + (i % 20) * 1.3, x = side * (halfW(z) + 16); _m.makeTranslation(x, 1.15, z); loo.setMatrixAt(i, _m); }
+    const loo = new THREE.InstancedMesh(new THREE.BoxGeometry(0.55, 1.15, 0.55), new THREE.MeshLambertMaterial({ color: 0x1c3a5a }), 40);
+    for (let i = 0; i < 40; i++) { const side = i < 20 ? -1 : 1, z = 40 + (i % 20) * 0.65, x = side * (halfW(z) + 16); _m.makeTranslation(x, 0.575, z); loo.setMatrixAt(i, _m); }
     this.group.add(loo);
     const fencePts = [];
     for (const side of [-1, 1]) for (let z = 14; z < 132; z += 2) { const x = side * (halfW(z) + 4); fencePts.push(V3(x, 0, z), V3(x, 1.2, z)); if (z + 2 < 132) fencePts.push(V3(x, 1.2, z), V3(side * (halfW(z + 2) + 4), 1.2, z + 2)); }
@@ -695,7 +619,7 @@ export class GroundGlow {
     const geo = new THREE.PlaneGeometry(460, 360, 1, 1);
     this.mat = new THREE.ShaderMaterial({
       uniforms: { uA: { value: new THREE.Color(0.4, 0.3, 0.9) }, uB: { value: new THREE.Color(0.9, 0.3, 0.5) }, uK: { value: 0.1 }, uT: { value: 0 }, uFlash: { value: 0 } },
-      vertexShader: /* glsl */`varying vec2 vP; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vP = w.xz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      vertexShader: /* glsl */`varying vec2 vP; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vP = w.xz / length(modelMatrix[0].xyz); gl_Position = projectionMatrix * viewMatrix * w; }`,   // site-local xz (the mesh sits in the scaled site group)
       fragmentShader: /* glsl */`
         uniform vec3 uA, uB; uniform float uK, uT, uFlash; varying vec2 vP;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -738,7 +662,6 @@ export class Festival {
     this.wheel = new FerrisWheel(V3(-108, 0, 78), 0); scene.add(this.wheel.group);
     this.tower = new DropTower(V3(112, 0, 84)); scene.add(this.tower.group);
     this.towers = new Towers(this.px); scene.add(this.towers.group);
-    this.flags = new Flags(crowd, 260); scene.add(this.flags.group);
     this.bands = new Wristbands(crowd, 0.5); scene.add(this.bands.mesh);
     this.festoons = new Festoons(this.px); scene.add(this.festoons.group);
     this.gate = new Gate(this.px, 128); scene.add(this.gate.group);
@@ -765,7 +688,6 @@ export class Festival {
     this.wheel.update(show, dt);
     this.tower.update(show, dt);
     this.towers.update(show, dt);
-    this.flags.update(show);
     this.bands.update(show, dt);
     this.festoons.update(show, this.px);
     this.gate.update(show, this.px);
@@ -790,7 +712,7 @@ export class Festival {
     this.px.commit();
   }
   // --- extra pyro helpers (particles) ---
-  /** CO2 jet from any point (delay towers, wings) */
+  /** CO2 jet from any point (roof-truss ends, wings) */
   jet(x, y, z, dir, color, n = 160) {
     const pr = this.particles, p = pr._p.set(x, y, z), v = pr._v;
     const c = color ? pr._c.copy(color).lerp(_c2.setRGB(1, 1, 1), 0.7) : pr._c.setRGB(1, 1, 1);

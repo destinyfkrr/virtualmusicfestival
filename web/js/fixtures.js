@@ -75,7 +75,7 @@ const beamFrag = /* glsl */`
     float rim = abs(dot(normalize(vN), normalize(vV)));
     float soft = pow(rim, 1.6);
     float haze = 0.88 + 0.12 * sin(along * 46.0 - time * 7.0);
-    float near = smoothstep(5.0, 34.0, vDist);              // beams sweeping past the lens fade instead of washing the frame
+    float near = smoothstep(8.0, 60.0, vDist);              // beams sweeping past the lens fade instead of washing the frame
     float a = min(fade * soft * haze * near * gain, 0.5);
     gl_FragColor = vec4(vC * a, 1.0);
   }`;
@@ -357,10 +357,10 @@ const crowdMove = /* glsl */`
   }
 `;
 export class Crowd {
-  constructor(count = 6000) {
-    this.count = count;
+  constructor(count = 18000, bodyScale = 0.5) {
+    this.count = count; this.bodyScale = bodyScale;   // bodyScale: the crowd sits inside the 2x stage group, so people are built at half size to stay human
     this.uT = { value: 0 }; this.uJump = { value: 0 }; this.uBounce = { value: 0 }; this.uBar = { value: 0 }; this.uWave = { value: 0 }; this.uPhone = { value: 0 };
-    const geo = new THREE.CapsuleGeometry(0.32, 1.1, 3, 6);
+    const geo = new THREE.CapsuleGeometry(0.32, 1.1, 2, 6);
     geo.translate(0, 0.9, 0);
     this.mat = new THREE.MeshLambertMaterial({ color: 0x0c0c16 });
     this.mat.onBeforeCompile = (sh) => {
@@ -379,7 +379,7 @@ export class Crowd {
       if (Math.abs(x) < 6 && z < 12) continue; // gap at the barrier
       base[i * 3] = x; base[i * 3 + 2] = z;
       rnd[i * 3] = Math.random() * Math.PI * 2; rnd[i * 3 + 1] = 0.25 + Math.random() * 0.55; rnd[i * 3 + 2] = Math.random();
-      scale[i] = 0.85 + Math.random() * 0.35;
+      scale[i] = (0.85 + Math.random() * 0.35) * bodyScale;
       rotY[i] = Math.random() * 0.6 - 0.3;
       e.set(0, rotY[i], 0); q.setFromEuler(e);
       m.compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(scale[i], scale[i], scale[i]));
@@ -387,7 +387,7 @@ export class Crowd {
       i++;
     }
     geo.setAttribute('aRnd', new THREE.InstancedBufferAttribute(rnd, 3));
-    this.base = base; this.rnd = rnd; this.scale = scale; this.rotY = rotY;   // exposed for flags / wristbands
+    this.base = base; this.rnd = rnd; this.scale = scale; this.rotY = rotY;   // exposed for wristbands
     this.mesh.frustumCulled = false;
     // phones: bright dots held up by ~15 % of the crowd, animated by the same shader idea
     const pc = Math.floor(count * 0.15);
@@ -411,7 +411,7 @@ export class Crowd {
       const j = Math.floor(Math.random() * count);
       prnd[k * 3] = rnd[j * 3]; prnd[k * 3 + 1] = rnd[j * 3 + 1]; prnd[k * 3 + 2] = Math.random();
       e.set(0, rotY[j], 0); q.setFromEuler(e);
-      m.compose(new THREE.Vector3(base[j * 3] + 0.35, 2.1 * scale[j], base[j * 3 + 2]), q, new THREE.Vector3(1, 1, 1));
+      m.compose(new THREE.Vector3(base[j * 3] + 0.35 * bodyScale, 2.1 * scale[j], base[j * 3 + 2]), q, new THREE.Vector3(bodyScale, bodyScale, bodyScale));
       this.phones.setMatrixAt(k, m);
     }
     pgeo.setAttribute('aRnd', new THREE.InstancedBufferAttribute(prnd, 3));
@@ -436,6 +436,7 @@ export class Crowd {
 export class Particles {
   constructor(capacity = 16000) {
     this.cap = capacity;
+    this.sizeK = 1;   // point-size multiplier: set to the parent group's scale so sprites keep their on-screen size
     this.pos = new Float32Array(capacity * 3);
     this.vel = new Float32Array(capacity * 3);
     this.life = new Float32Array(capacity);
@@ -472,7 +473,7 @@ export class Particles {
     this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
     this.vel[i * 3] = v.x; this.vel[i * 3 + 1] = v.y; this.vel[i * 3 + 2] = v.z;
     this.col[i * 3] = color.r; this.col[i * 3 + 1] = color.g; this.col[i * 3 + 2] = color.b;
-    this.life[i] = life; this.maxLife[i] = life; this.size[i] = size; this.size0[i] = size;
+    this.life[i] = life; this.maxLife[i] = life; size *= this.sizeK; this.size[i] = size; this.size0[i] = size;
     this.drag[i] = drag; this.grav[i] = grav; this.fade[i] = fade;
   }
   /** CO2 jet from the deck edge; dir tilts it sideways (-1..1) */

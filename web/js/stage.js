@@ -1,6 +1,6 @@
 // Virtual-Fest — the virtual main stage.
-//  - set geometry (deck, booth, LED walls, trusses, towers, delay towers)
-//  - fixture rigs: ~330 moving heads, ~170 strobes/blinders, ~50 laser sources (~520 beams),
+//  - set geometry (deck, booth, LED walls, trusses, towers), built 2x life size around a human-scale crowd
+//  - fixture rigs: ~310 moving heads, ~165 strobes/blinders, ~47 laser sources (~360 beams),
 //    ~3.8k rig pixels + the artist centrepiece (another 0.5–1.5k pixels, kinetic parts, holo screens)
 //  - cue handling from the director (drops, bars, phrases, phases, pyro, logos)
 //  - per-song look (seeded from the track) so no two songs run the same show
@@ -67,7 +67,12 @@ const _lzA = new THREE.Color(), _lzC = new THREE.Color();
 
 // ---------------------------------------------------------------- tables
 const HEAD_BASE = { idle: 0.08, intro: 0.28, groove: 0.4, build: 0.5, drop: 0.72, peak: 0.6, breakdown: 0.2 };
-const LASER_GROUPS = 7; // back truss, front truss, towers, wings, delay towers, deck, arch cones
+const LASER_GROUPS = 6; // back truss, front truss, towers, wings, deck, arch cones
+// The set, rig, centrepiece and grounds are authored in "site" units and live in a group scaled WORLD_SCALE times, so the
+// stage stands 2x life size; the crowd is built at 1/WORLD_SCALE inside it so people stay human. The camera and lights
+// work in world units, hence the point-light compensation (three.js point lights fall off as 1/d^decay, decay 1.8).
+const WORLD_SCALE = 2;
+const LIGHT_K = Math.pow(WORLD_SCALE, 1.8);
 const DENSITY_PRESETS = [['low', 0.45], ['med', 0.7], ['high', 1.0]];
 const HEAD_SETS = {
   idle: ['slowSweep', 'skySearch'],
@@ -92,7 +97,7 @@ const HOLO_POOL = ['rings', 'mandala', 'figure', 'sun', 'particles', 'starfield'
 const FLAME_X = [-24, -16, -8, 8, 16, 24];
 const SPARK_X = [-20, -10, 10, 20];
 const BAND_BINS = [[1, 3], [3, 6], [6, 12], [12, 24], [24, 48], [48, 96], [96, 200], [200, 420]];
-const ZONE = { arch: 0, truss: 1, tower: 2, col: 3, deck: 4, frame: 5, drop: 6, runway: 7, delay: 8, floor: 9, riser: 10 };
+const ZONE = { arch: 0, truss: 1, tower: 2, col: 3, deck: 4, frame: 5, drop: 6, runway: 7, floor: 9, riser: 10 };
 
 // ---------------------------------------------------------------- rig pixel patterns (shape agnostic, zone aware)
 const pc = new THREE.Color();
@@ -137,15 +142,15 @@ export class Stage {
     this.renderer.toneMappingExposure = 1.05;
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x020209);
-    this.scene.fog = new THREE.FogExp2(0x04040c, 0.0045);
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 900);
-    this.camera.position.set(0, 16, 95);
+    this.scene.fog = new THREE.FogExp2(0x04040c, 0.0045 / WORLD_SCALE);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 2000);
+    this.camera.position.set(0, 32, 190);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
-    this.controls.target.set(0, 10, -5);
+    this.controls.target.set(0, 20, -10);
     this.controls.maxPolarAngle = Math.PI * 0.52;
-    this.controls.minDistance = 8;
-    this.controls.maxDistance = 220;
+    this.controls.minDistance = 16;
+    this.controls.maxDistance = 440;
     this.manualUntil = 0;
     this.controls.addEventListener('start', () => { this.manualUntil = performance.now() + 25000; });
 
@@ -180,28 +185,31 @@ export class Stage {
   // ------------------------------------------------------------ world
   _buildWorld() {
     const s = this.scene;
+    // `big` holds the whole site (set, rig, centrepiece, grounds, crowd, particles, point lights) at WORLD_SCALE; only the
+    // sky-level dressing (ground plane, stars, ambient light) and the camera live in the scene itself.
+    const b = this.big = new THREE.Group(); b.scale.setScalar(WORLD_SCALE); s.add(b);
     s.add(new THREE.AmbientLight(0x222233, 0.3));
     s.add(new THREE.HemisphereLight(0x223355, 0x050508, 0.25));
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshStandardMaterial({ color: 0x16161f, roughness: 0.9 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(800 * WORLD_SCALE, 800 * WORLD_SCALE), new THREE.MeshStandardMaterial({ color: 0x16161f, roughness: 0.9 }));
     ground.rotation.x = -Math.PI / 2; s.add(ground);
     const starGeo = new THREE.BufferGeometry(); const sp = new Float32Array(1800 * 3);
-    for (let i = 0; i < 1800; i++) { const a = Math.random() * Math.PI * 2, e = Math.random() * 0.5 + 0.03, r = 480; sp[i * 3] = Math.cos(a) * Math.cos(e) * r; sp[i * 3 + 1] = Math.sin(e) * r; sp[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r; }
+    for (let i = 0; i < 1800; i++) { const a = Math.random() * Math.PI * 2, e = Math.random() * 0.5 + 0.03, r = 480 * WORLD_SCALE; sp[i * 3] = Math.cos(a) * Math.cos(e) * r; sp[i * 3 + 1] = Math.sin(e) * r; sp[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r; }
     starGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-    s.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.1, fog: false })));
-    this.washLights = [[-26, 14, 32], [0, 16, 44], [26, 14, 32]].map(p => { const l = new THREE.PointLight(0xffffff, 0, 90, 1.8); l.position.set(p[0], p[1], p[2]); s.add(l); return l; });
-    this.stageLight = new THREE.PointLight(0xffffff, 4, 50, 1.8); this.stageLight.position.set(0, 14, 4); s.add(this.stageLight);
-    this.crowd = new Crowd(6000); s.add(this.crowd.mesh); if (this.crowd.phones) s.add(this.crowd.phones);
-    this.particles = new Particles(16000); s.add(this.particles.points);
+    s.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.1 * WORLD_SCALE, fog: false })));
+    this.washLights = [[-26, 14, 32], [0, 16, 44], [26, 14, 32]].map(p => { const l = new THREE.PointLight(0xffffff, 0, 90 * WORLD_SCALE, 1.8); l.position.set(p[0], p[1], p[2]); b.add(l); return l; });
+    this.stageLight = new THREE.PointLight(0xffffff, 4 * LIGHT_K, 50 * WORLD_SCALE, 1.8); this.stageLight.position.set(0, 14, 4); b.add(this.stageLight);
+    this.crowd = new Crowd(18000, 1 / WORLD_SCALE); b.add(this.crowd.mesh); if (this.crowd.phones) b.add(this.crowd.phones);
+    this.particles = new Particles(16000); this.particles.sizeK = WORLD_SCALE; b.add(this.particles.points);
   }
 
   // ------------------------------------------------------------ set + LED walls + pixel architecture
   _buildStage() {
-    const s = this.scene;
+    const s = this.big;
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.8, metalness: 0.3 });
     const truss = new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 0.5, metalness: 0.8 });
     const box = (w, h, d, x, y, z, m = dark) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); s.add(mesh); return mesh; };
     box(56, 2.2, 16, 0, 1.1, -3); box(14, 1.2, 6, 0, 2.8, -2); box(9, 2.2, 3, 0, 4.5, -1);
-    const dj = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1.3, 4, 8), new THREE.MeshStandardMaterial({ color: 0x0a0a0a })); dj.position.set(0, 4.6, -2.8); s.add(dj);
+    const dj = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.55, 4, 8), new THREE.MeshStandardMaterial({ color: 0x0a0a0a })); dj.position.set(0, 6.06, -1.95); s.add(dj);   // human-sized, standing behind the booth table
 
     // LED walls
     this.panels = [];
@@ -230,12 +238,6 @@ export class Stage {
       bar(V3(side * 46, 0, 0), V3(side * 46, 32, 0), 0.35);
       bar(V3(side * 36, 25, 6), V3(side * 30, 28, -8));
       bar(V3(side * 40, 31, -2), V3(side * 46, 32, 0));
-      // delay towers out in the crowd
-      const dx = side * 34, dz = 52;
-      for (const ox of [-2, 2]) for (const oz of [-2, 2]) bar(V3(dx + ox, 0, dz + oz), V3(dx + ox, 16, dz + oz), 0.2);
-      bar(V3(dx - 2, 16, dz - 2), V3(dx + 2, 16, dz - 2), 0.15); bar(V3(dx - 2, 16, dz + 2), V3(dx + 2, 16, dz + 2), 0.15);
-      bar(V3(dx - 2, 16, dz - 2), V3(dx - 2, 16, dz + 2), 0.15); bar(V3(dx + 2, 16, dz - 2), V3(dx + 2, 16, dz + 2), 0.15);
-      box(6, 0.4, 6, dx, 16.4, dz, truss);
     }
 
     // pixel architecture
@@ -252,9 +254,6 @@ export class Stage {
       for (const ox of [-0.5, 0.5]) strip('col', pathLine(V3(side * 36 + ox, 0.5, 6.4), V3(side * 36 + ox, 24.5, 6.4), 50), 0.28, ZONE.col, side < 0 ? 1 : 6);
       strip('deckside', pathLine(V3(side * 28.1, 2.25, -11), V3(side * 28.1, 2.25, 5), 33), 0.3, ZONE.deck);
       strip('wingEdge', pathLine(V3(side * 26, 3, -7), V3(side * 34, 21, -7), 41), 0.25, ZONE.frame, side < 0 ? 2 : 5);
-      // delay tower edges
-      const dx = side * 34, dz = 52;
-      for (const ox of [-2.3, 2.3]) for (const oz of [-2.3, 2.3]) strip('delay', pathLine(V3(dx + ox, 0.5, dz + oz), V3(dx + ox, 16, dz + oz), 32), 0.3, ZONE.delay, side < 0 ? 3 : 4);
     }
     strip('deckfront', pathLine(V3(-27.5, 2.25, 5.1), V3(27.5, 2.25, 5.1), 111), 0.3, ZONE.deck);
     strip('riser', pathLine(V3(-7, 3.45, 1.1), V3(7, 3.45, 1.1), 31), 0.22, ZONE.riser);
@@ -293,13 +292,13 @@ export class Stage {
   }
 
   // ------------------------------------------------------------ lighting rig
-  // ---- festival grounds: sky, haze, landscape, rides, towers, flags, wristbands, festoons, gate, dressing
+  // ---- festival grounds: sky, haze, landscape, rides, towers, wristbands, festoons, gate, dressing
   _buildFestival() {
-    this.fest = new Festival(this.scene, this.crowd, this.particles, this.mainPanel.mat);
+    this.fest = new Festival(this.big, this.crowd, this.particles, this.mainPanel.mat);
   }
 
   _buildRig() {
-    const s = this.scene;
+    const s = this.big;
     // moving heads
     const H = this.heads = new BeamArray();
     const zoneCounts = {};
@@ -312,7 +311,6 @@ export class Stage {
       for (let i = 0; i < 9; i++) head(side * 36.6, 4 + i * 2.5, 6.7, 4, true);
       for (let i = 0; i < 6; i++) { head(side * (26 + i * 2), 3.4, -6.4, 7, true); head(side * (26 + i * 2), 21.6, -6.4, 7, true); }
       for (let i = 0; i < 6; i++) { const f = i / 5; head(side * (36 - 6 * f), 25 + 3 * f, 6 - 14 * f, 9); }
-      for (let i = 0; i < 8; i++) head(side * 34 - 3.5 + i, 16.9, 52, 10, true);
     }
     for (let i = 0; i < 27; i++) head(-26 + i * 2, 2.4, -9.2, 5, true);
     for (let i = 0; i < 19; i++) head(-27 + i * 3, 2.4, 5.6, 6, true);
@@ -320,7 +318,7 @@ export class Stage {
     s.add(H.build());
     this.headMeta = H.meta;
     for (const m of this.headMeta) m.u = zoneCounts[m.zone] > 1 ? m.k / (zoneCounts[m.zone] - 1) : 0.5;
-    for (let i = 0; i < H.n; i++) { const z = this.headMeta[i].zone; H.len[i] = z === 5 || z === 6 ? 1.15 : z === 10 ? 1.3 : 1; }
+    for (let i = 0; i < H.n; i++) { const z = this.headMeta[i].zone; H.len[i] = z === 5 || z === 6 ? 1.15 : 1; }
     this.seedA = new Float32Array(H.n); this.seedB = new Float32Array(H.n); this.seedR = new Float32Array(H.n);
 
     // strobes + blinders
@@ -333,7 +331,6 @@ export class Stage {
       for (let i = 0; i < 13; i++) st(side * 46.6, 5 + i * 2, 1, 'tower', i, { u: i / 12, rot: new THREE.Euler(0, -side * 0.4, 0) });
       for (const x of [30, 34]) for (const y of [5, 20]) st(side * x, y, -6.3, 'blinder', 0, { w: 2, h: 1.2, warm: true });
       for (const x of [20, 38]) st(side * x, 3.6, 5.2, 'blinder', 0, { w: 2, h: 1.2, warm: true });
-      for (const ox of [-1.5, 1.5]) st(side * 34 + ox, 15.2, 49.6, 'blinder', 1, { w: 2, h: 1.2, warm: true, rot: new THREE.Euler(0, Math.PI, 0) });
     }
     for (const x of [-25, -15, -5, 5, 15, 25]) st(x, 22.2, 6.5, 'blinder', 0, { w: 2.4, h: 1.4, warm: true });
     for (let i = 0; i < 37; i++) st(-27 + i * 1.5, 2.9, 5.25, 'deck', i, { w: 0.9, h: 0.35, u: i / 36 });
@@ -352,10 +349,9 @@ export class Stage {
     for (const side of [-1, 1]) {
       for (const y of [8, 14, 20, 26]) laser(side * 46.6, y, 1, 7, { yaw: -side * 0.4 }, 2);
       for (const x of [28, 32, 36]) laser(side * x, 22, -6.3, 6, { yaw: -side * 0.2, pitch: 0.05 }, 3);
-      for (const ox of [-2, 2]) laser(side * 34 + ox, 16.4, 51.5, 6, { yaw: Math.PI, pitch: 0.02 }, 4);
     }
-    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 8, { pitch: 0.35 }, 5);
-    for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 6); }
+    for (let i = 0; i < 7; i++) laser(-24 + i * 8, 2.6, -9.5, 8, { pitch: 0.35 }, 4);
+    for (let i = 0; i < 6; i++) { const a = 0.25 + (Math.PI - 0.5) * i / 5; laser(Math.cos(a) * 31.5, 2 + Math.sin(a) * 31.5, -11.3, 8, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
     const reach = {};
     for (const src of L.sources) reach[src.meta.grp] = Math.max(reach[src.meta.grp] || 0, Math.abs(src.pos.x));
     for (const src of L.sources) { const m = src.meta; m.u = reach[m.grp] > 0 ? Math.abs(src.pos.x) / reach[m.grp] : 0.5; m.seed = hash(m.grp * 77 + 5) * 6.283 + m.u * 1.4; }
@@ -390,7 +386,7 @@ export class Stage {
       wingsFollow: rng.chance(0.5),
       chaseDiv: rng.pick([2, 3, 4]),
       cutEvery: rng.pick([4, 4, 8]),
-      laserRank: rng.shuffle([0, 1, 2, 3, 4, 5, 6]), laserRot: rng.int(LASER_GROUPS),
+      laserRank: rng.shuffle([0, 1, 2, 3, 4, 5]), laserRot: rng.int(LASER_GROUPS),
       headSets: {},
     };
     for (const k in HEAD_SETS) this.song.headSets[k] = rng.shuffle(HEAD_SETS[k]);
@@ -401,7 +397,7 @@ export class Stage {
     if (key !== this.centreKey) {
       if (this.centre) this.centre.dispose();
       this.centre = new Centrepiece(profile.centre, this.style, rng);
-      this.scene.add(this.centre.group);
+      this.big.add(this.centre.group);
       this.centreKey = key;
     }
     this.allPanels = this.panels.concat(this.centre.panels);
@@ -488,7 +484,7 @@ export class Stage {
         if (bar % 4 === 0 && (s.pyro ?? 0.6) > 0.5) this.fx.sparkUntil = this.t + 1.6;
         if (bar % 8 === 4 && (s.pyro ?? 0.6) > 0.6) this.particles.firework((Math.random() - 0.5) * 70, 45 + Math.random() * 20, -35, pal[bar % pal.length]);
         if (bar % 16 === 8 && (s.confetti ?? 0.3) > 0.5 && this.rng.chance(s.confetti)) for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 200);
-        if (bar % 8 === 6 && (s.pyro ?? 0.6) > 0.3) for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[(bar + 1) % pal.length], 140);
+        if (bar % 8 === 6 && (s.pyro ?? 0.6) > 0.3) for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[(bar + 1) % pal.length], 140);
         if (bar % 16 === 0 && (s.pyro ?? 0.6) > 0.5 && this.rng.chance(0.7)) this.fx.fallUntil = this.t + 2.2;
         if (bar % 8 === 2 && (s.pyro ?? 0.6) > 0.3 && this.rng.chance(0.6)) this.fx.waterUntil = this.t + 1.4;
         if (bar % 16 === 12 && (s.pyro ?? 0.6) > 0.6 && this.rng.chance(0.6)) for (const x of [-30, 30]) this.fest.comet(x, 8, pal[bar % pal.length]);
@@ -518,7 +514,7 @@ export class Stage {
     if (!confirmed) {
       if (pyro > 0.2) for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
       if (pyro > 0.4) this.fx.flameUntil = t + 1.0 + pyro;
-      if (pyro > 0.3) for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[1 % pal.length], 180);
+      if (pyro > 0.3) for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[1 % pal.length], 180);
       if (pyro > 0.5 && this.rng.chance(0.5)) this.fx.waterUntil = t + 1.6;
       return;
     }
@@ -534,7 +530,7 @@ export class Stage {
     const pal = this.director.show.palette, t = this.t;
     for (const x of [-24, -12, 12, 24]) this.particles.co2(x, 4.5, 1, pal[0]);
     this.fx.flameUntil = t + 1.6; this.fx.sparkUntil = t + 3; this.fx.fallUntil = t + 2.5; this.fx.waterUntil = t + 1.8;
-    for (const x of [-34, 34]) this.fest.jet(x, 16.8, 52, 0, pal[1 % pal.length], 180);
+    for (const x of [-40, 40]) this.fest.jet(x, 31.6, -2, Math.sign(x) * 0.35, pal[1 % pal.length], 180);
     for (const x of [-30, 30]) this.fest.comet(x, 8, pal[2 % pal.length]);
     for (let k = 0; k < 3; k++) setTimeout(() => this.particles.firework((Math.random() - 0.5) * 80, 40 + Math.random() * 25, -30 - Math.random() * 20, pal[k % pal.length]), k * 250);
     for (const x of [-20, 0, 20]) this.particles.confetti(x, 26, 2, pal, 260);
@@ -606,24 +602,26 @@ export class Stage {
   _updateCamera(dt, show) {
     if (performance.now() < this.manualUntil) { this.controls.update(); return; }
     this.shotTime += dt;
-    const t = this.shotTime, T = Math.min(1, t / 14), v = this.tmpV, look = this.tmpV2.set(0, 11, -6);
+    const t = this.shotTime, T = Math.min(1, t / 14), v = this.tmpV, look = this.tmpV2.set(0, 22, -12);
     const fov = this.shotIndex === 10 ? 68 : 55;
     if (this.camera.fov !== fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    // World units: the site is WORLD_SCALE x its authored coordinates, so the framing shots sit twice as far out as the
+    // stage they frame; the eye-level shots (1, 2, 7, 12) stay at human head height in the crowd.
     switch (this.shotIndex) {
-      case 0: v.set(Math.sin(t * 0.1) * 6, 16 - 3 * T, 100 - 22 * T); break;
-      case 1: v.set(-34 + 14 * T, 3.2, 58 - 12 * T); look.set(4, 14, -6); break;
-      case 2: v.set(34 - 14 * T, 3.2, 58 - 12 * T); look.set(-4, 14, -6); break;
-      case 3: v.set(58 - 10 * T, 20 - 4 * T, 48 - 14 * T); look.set(0, 12, -6); break;
-      case 4: v.set(Math.sin(t * 0.3) * 3, 6 + T, 24 - 5 * T); look.set(0, 9, -9); break;
-      case 5: v.set(0, 4 + 2 * T, 62 - 10 * T); look.set(0, 28 - 8 * T, -10); break;
-      case 6: { const a = t * 0.08 + Math.PI / 2; v.set(Math.cos(a) * 75, 22, 40 + Math.sin(a) * 40); look.set(0, 12, -6); break; }
-      case 7: v.set(-12 + 24 * Math.abs(Math.sin(t * 0.05)), 2.2 + 0.15 * Math.sin(t * 1.7), 42 - 6 * T); look.set(Math.sin(t * 0.4) * 3, 14, -6); break;
-      case 8: v.set(Math.sin(t * 0.15) * 10, 42 - 6 * T, 34 - 8 * T); look.set(0, 8, -8); break;
-      case 9: v.set(0, 6.6, -2.6); look.set(Math.sin(t * 0.2) * 14, 8 + Math.sin(t * 0.13) * 3, 60); break;
-      case 10: v.set(Math.sin(t * 0.6) * 0.7, 7.5 + 1.5 * T + 0.12 * Math.sin(t * 2.1), 196 - 30 * T); look.set(0, 15, 0); break;   // walking in through the entrance gate (wide lens)
-      case 11: { const s = smooth(0.3, 0.8, T); v.set(-78 + 30 * T, 20 + 4 * T, 118 - 40 * T); look.set(-108 + 108 * s, 30 - 15 * s, 78 - 78 * s); break; }   // crane: hold on the ferris wheel, pan to the stage
-      case 12: v.set(14 - 4 * T, 2.6 + 0.2 * Math.sin(t * 1.9), 34 - 6 * T); look.set(-4 + 4 * T, 13, -6); break;      // low in the crowd among the flags
-      default: v.set(0, 16, 95);
+      case 0: v.set(Math.sin(t * 0.1) * 12, 32 - 6 * T, 200 - 44 * T); break;
+      case 1: v.set(-68 + 28 * T, 3.2, 116 - 24 * T); look.set(8, 28, -12); break;
+      case 2: v.set(68 - 28 * T, 3.2, 116 - 24 * T); look.set(-8, 28, -12); break;
+      case 3: v.set(116 - 20 * T, 40 - 8 * T, 96 - 28 * T); look.set(0, 24, -12); break;
+      case 4: v.set(Math.sin(t * 0.3) * 6, 12 + 2 * T, 48 - 10 * T); look.set(0, 18, -18); break;
+      case 5: v.set(0, 5 + 3 * T, 124 - 20 * T); look.set(0, 56 - 16 * T, -20); break;
+      case 6: { const a = t * 0.08 + Math.PI / 2; v.set(Math.cos(a) * 150, 44, 80 + Math.sin(a) * 80); look.set(0, 24, -12); break; }
+      case 7: v.set(-24 + 48 * Math.abs(Math.sin(t * 0.05)), 2.2 + 0.15 * Math.sin(t * 1.7), 84 - 12 * T); look.set(Math.sin(t * 0.4) * 6, 28, -12); break;
+      case 8: v.set(Math.sin(t * 0.15) * 20, 84 - 12 * T, 68 - 16 * T); look.set(0, 16, -16); break;
+      case 9: v.set(0, 13.1, -2.8); look.set(Math.sin(t * 0.2) * 28, 12 + Math.sin(t * 0.13) * 6, 120); break;
+      case 10: v.set(Math.sin(t * 0.6) * 1.2, 9 + 2 * T + 0.12 * Math.sin(t * 2.1), 392 - 60 * T); look.set(0, 30, 0); break;   // walking in through the entrance gate (wide lens)
+      case 11: { const s = smooth(0.3, 0.8, T); v.set(-156 + 60 * T, 40 + 8 * T, 236 - 80 * T); look.set(-216 + 216 * s, 60 - 30 * s, 156 - 156 * s); break; }   // crane: hold on the ferris wheel, pan to the stage
+      case 12: v.set(28 - 8 * T, 2.6 + 0.2 * Math.sin(t * 1.9), 68 - 12 * T); look.set(-8 + 8 * T, 26, -12); break;      // low in the crowd
+      default: v.set(0, 32, 190);
     }
     v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04);
     const k = 1 - Math.exp(-dt * (t < 0.05 ? 100 : 2.5));
@@ -858,18 +856,18 @@ export class Stage {
     if (t < this.fx.sparkUntil) for (const x of SPARK_X) pr.sparkular(x, 2.4, 4.2, 3, 1.2);
     if (t < this.fx.waterUntil) this.fest.water(3);
     if (t < this.fx.fallUntil) this.fest.waterfall(2);
-    if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const x of [-34, 34]) pr.flame(x, 16.8, 52, 1.3, 6);
+    if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const x of [-46, 46]) pr.flame(x, 32.4, 0, 1.3, 6);
     pr.update(dt);
   }
 
   _updateWorld(show, dt) {
     const ph = show.phase, hi = HI.has(ph), dip = show.dip || 0;
     const base = ph === 'idle' ? 2 : ph === 'breakdown' ? 6 : 10;
-    const wi = (base + 60 * show.bass * show.energy + 80 * show.strobe + 120 * show.whiteout) * (1 - 0.7 * dip);
+    const wi = (base + 60 * show.bass * show.energy + 80 * show.strobe + 120 * show.whiteout) * (1 - 0.7 * dip) * LIGHT_K;
     const cols = [show.colorA, show.colorC, show.colorB];
     this.washLights.forEach((l, i) => { l.color.copy(cols[i]).lerp(WHITE, show.whiteout); l.intensity = wi; });
     this.stageLight.color.copy(show.colorB).lerp(WHITE, 0.5);
-    this.stageLight.intensity = (8 + 30 * show.bass) * (1 - 0.6 * dip);
+    this.stageLight.intensity = (8 + 30 * show.bass) * (1 - 0.6 * dip) * LIGHT_K;
     this.crowd.mat.color.copy(show.colorA).multiplyScalar(0.05 + 0.08 * show.energy).add(this.tmpC.setRGB(0.03, 0.03, 0.05));
     // Bloom backs off as the rig fills up: hundreds of additive beams plus HDR strobe faces would
     // otherwise stack into a full-screen white haze during drops (dark phases keep the soft glow).

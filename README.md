@@ -4,8 +4,9 @@ A Tomorrowland / Ultra style festival rendered in the browser (three.js): a main
 walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames, water and fireworks
 react in real time to whatever your Mac's Spotify app is playing — beat-grid locked, with a
 per-artist stage design, a per-song colour theme and the artist's real logo on the screens —
-set in full festival grounds (crowd, towers, ferris wheel, drop tower, entrance gate, flags,
-festoons, sky).
+set in full festival grounds (crowd, lighting towers, ferris wheel, drop tower, entrance gate,
+festoons, sky). The set is built twice life size around a human-scale crowd, the way the big
+festival main stages dwarf the field in front of them.
 
 Audio is captured with a macOS Core Audio *process tap* (macOS 14.2+), so no virtual audio
 driver (BlackHole etc.) is needed and Spotify keeps playing through your speakers.
@@ -101,13 +102,14 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
 - `web/js/fixtures.js` — GPU-instanced fixture arrays: `BeamArray` (moving heads with
   volumetric beams), `StrobeArray`, `LaserBank`, `PixelStrips`, `LedPanel`, `Crowd`,
   `Particles`.
-- `web/js/stage.js` — the set: ~330 moving heads, ~170 strobes/blinders, ~50 laser
-  sources (~380 beams), ~3.8k architectural pixels (arches, trusses, towers, frames,
-  runway, delay towers) plus the centrepiece, the 6k crowd with phone lights, bloom, and
-  the camera director (13 shots, drop cuts on the downbeat). The *Lights* density scales
+- `web/js/stage.js` — the set, built 2x life size: ~310 moving heads, ~165 strobes/blinders,
+  47 laser sources (~360 beams), thousands of architectural pixels (arches, trusses, towers,
+  frames, runway) plus the centrepiece, the 18k crowd with phone lights, bloom, and the
+  camera director (13 shots, drop cuts on the downbeat). Nothing stands in the crowd: no FOH
+  platform or delay towers, so every shot from the field sees the whole stage. The *Lights* density scales
   how many beams and lasers are up at once and how bright they are, so the stage always stays visible.
   Lasers are run the way a laser operator runs them: the projectors on one truss share a
-  look (mirrored fans, one phase running along the truss) and only one to three of the seven
+  look (mirrored fans, one phase running along the truss) and only one to three of the six
   laser groups fire at once, so a drop is a few big coherent fans instead of a web of lines,
   and every laser is a pure saturated hue no matter what the LED palette is doing. Moving-head
   beams are narrow and fade along their length like beams in real haze, so a sky full of them
@@ -117,10 +119,9 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   exposure by up to a stop when a laser and beam wall starts to blow the stage out, so the
   stage stays legible through the heaviest drop moments and never dims on a dark wide shot.
 - `web/js/festival.js` — the grounds: sky dome with stars, moon and horizon glow, haze,
-  hills and tree lines, a ferris wheel and a drop tower with chasing pixel rims, the FOH
-  tower with follow spots, four crowd lighting towers with pixel edges and level meters,
-  six perimeter skytrackers, crowd flags, wristbands that pulse with the show, festoon
-  strings over the field, the entrance gate with its pixel-outlined VIRTUAL-FEST sign, a lit
+  hills and tree lines, a ferris wheel and a drop tower with chasing pixel rims, four crowd
+  lighting towers with pixel edges and level meters, six perimeter skytrackers, wristbands
+  that pulse with the show, festoon strings over the field, the entrance gate with its pixel-outlined VIRTUAL-FEST sign, a lit
   cobble path with bollards and lamp posts, stage-colour light spill on the grass, and the
   stage dressing (PA hangs, subs, side screens, water jets, waterfall, flame bars, comets).
 
