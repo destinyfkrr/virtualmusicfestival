@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAINSTAGE</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "/vendor/three/build/three.module.js",
+    "three/addons/": "/vendor/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div id="enter">
+  <div class="enter-inner">
+    <div class="wordmark">MAIN<span>STAGE</span></div>
+    <p class="tag">A virtual festival stage. The light show follows whatever your Mac's Spotify is playing, live.</p>
+    <button id="enter-btn">ENTER</button>
+    <p class="hint"><b>F</b> fullscreen · <b>C</b> / <b>1–0</b> camera · <b>L</b> logo · <b>P</b> pyro · <b>D</b> drop · <b>[ ]</b> sync · <b>H</b> hide overlay · <b>S</b> audio source</p>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="top-left">
+    <div class="pill" id="source-pill"><span class="dot"></span><span id="source-text">connecting</span></div>
+    <div class="meters">
+      <div class="meter"><label>BPM</label><b id="bpm">—</b></div>
+      <div class="meter"><label>PHASE</label><b id="phase">idle</b></div>
+      <div class="meter"><label>SYNC</label><b id="sync">—</b></div>
+      <div class="meter bar"><label>ENERGY</label><i id="energy"></i></div>
+      <div class="meter bar"><label>BASS</label><i id="bass"></i></div>
+    </div>
+  </div>
+
+  <div class="now-playing" id="now-playing">
+    <img id="art" alt="">
+    <div class="np-text">
+      <div class="np-label">NOW PLAYING</div>
+      <div class="np-title" id="title">Nothing playing</div>
+      <div class="np-artist" id="artist">Play something on Spotify</div>
+      <div class="np-show" id="show-line"></div>
+      <div class="np-progress"><i id="progress"></i></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <div class="bottom-right">
+    <button class="btn" id="btn-source">Source</button>
+    <button class="btn" id="btn-cam">Camera</button>
+    <button class="btn" id="btn-logo">Logo</button>
+    <button class="btn" id="btn-pyro">Pyro</button>
+    <button class="btn" id="btn-full">Fullscreen</button>
+  </div>
+</div>
+
+<div id="source-menu" hidden>
+  <h3>Audio source</h3>
+  <button data-src="server">Spotify tap (native, recommended)</button>
+  <button data-src="screen">Screen / tab audio share</button>
+  <div class="row">
+    <select id="device-select"></select>
+    <button data-src="device">Use input device</button>
+  </div>
+  <p class="small">Native tap captures Spotify's own audio on macOS 14.2+. If macOS asked for a "System Audio Recording" permission, grant it to your terminal and restart the server.</p>
+  <button class="close" id="source-close">Close</button>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

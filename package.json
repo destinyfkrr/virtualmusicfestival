@@ -1,0 +1,16 @@
+{
+  "name": "mainstage",
+  "version": "1.0.0",
+  "description": "Virtual festival main stage with LED/lighting show driven live by Spotify audio on your Mac",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build:native": "sh native/build.sh",
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "three": "^0.180.0",
+    "ws": "^8.18.0"
+  }
+}
