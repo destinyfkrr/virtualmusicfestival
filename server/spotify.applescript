@@ -8,5 +8,9 @@ tell application "Spotify"
 	set trackPos to player position
 	set trackDur to duration of trk
 	set trackId to id of trk
-	return playerState & tab & trackName & tab & trackArtist & tab & trackAlbum & tab & trackArt & tab & trackPos & tab & trackDur & tab & trackId
+	set trackAlbumArtist to ""
+	try
+		set trackAlbumArtist to album artist of trk
+	end try
+	return playerState & tab & trackName & tab & trackArtist & tab & trackAlbum & tab & trackArt & tab & trackPos & tab & trackDur & tab & trackId & tab & trackAlbumArtist
 end tell

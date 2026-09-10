@@ -18,8 +18,8 @@ function noiseBuffer(ctx, secs) {
 }
 
 export class DemoTrack {
-  constructor(ctx, artist = 'Martin Garrix') {
-    this.ctx = ctx; this.artist = artist;
+  constructor(ctx, artist = 'Martin Garrix', song = '') {
+    this.ctx = ctx; this.artist = artist; this.song = song || '';   // song: a title for the metadata (e.g. an NCS release: ?demo=Jim%20Yosef&song=Link)
     this.out = ctx.createGain(); this.out.gain.value = 0.9;
     this.master = ctx.createDynamicsCompressor();
     this.master.threshold.value = -14; this.master.ratio.value = 5; this.master.attack.value = 0.004; this.master.release.value = 0.12;
@@ -39,8 +39,8 @@ export class DemoTrack {
   position() { return Math.max(0, this.ctx.currentTime - this.startAt) % this.duration(); }
   section() { return this._sectionAt(Math.floor(Math.max(0, this.ctx.currentTime - this.startAt) * BPM / 240)).name; }
   track() {
-    return { type: 'track', state: 'playing', name: 'Demo Set (' + this.section() + ')', artist: this.artist, album: 'Virtual-Fest built-in demo',
-      art: '', id: 'demo:' + this.artist.toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':' + Math.round(this.startAt * 1000), position: this.position(), duration: this.duration(), ts: Date.now() };
+    return { type: 'track', state: 'playing', name: this.song || 'Demo Set (' + this.section() + ')', artist: this.artist, album: 'Virtual-Fest built-in demo',
+      art: '', id: 'demo:' + (this.artist + (this.song ? ' ' + this.song : '')).toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':' + Math.round(this.startAt * 1000), position: this.position(), duration: this.duration(), ts: Date.now() };
   }
 
   _sectionAt(bar) { let b = bar % TOTAL, prev = SECTIONS[SECTIONS.length - 1][0]; for (const [name, len] of SECTIONS) { if (b < len) return { name, len, at: b, prev }; b -= len; prev = name; } return { name: 'drop', len: 16, at: 0, prev }; }

@@ -34,6 +34,8 @@ Open http://localhost:5173/?demo — a built-in synthesised 135 s EDM arrangemen
 (intro → groove → build → drop → breakdown → build → drop) plays through the speakers and drives
 the show. Add an artist to get their rig, logo and colour treatment:
 `/?demo=Armin%20van%20Buuren`, `/?demo=Charlotte%20de%20Witte`, … (default: Martin Garrix).
+Add `&song=` to give the set a real title, e.g. `/?demo=Jim%20Yosef&song=Link` plays the demo
+as an NCS release (NCS mark on the walls, "NCS release" on the now-playing line).
 
 ## Fallback audio sources
 
@@ -95,6 +97,15 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
   the walls reveal it (wipe / scan / scale / flicker / build) on song start, drops and
   breakdown phrases, falling back to the procedural marks in `web/js/marks.js` (plus,
   triangle, x, mau5 head, spiral…) and wordmarks.
+- **NoCopyrightSounds** — `web/data/ncs.json` is the NCS catalog: every release listed at
+  ncs.io/music (about 2000 tracks, scraped by `server/ncs.js`, refreshed weekly into
+  `cache/ncs/` and served at `/ncs/catalog`; the bundled snapshot is the fallback, so it works
+  offline). `web/js/ncs.js` matches the playing track against it: the title with feat. / remix /
+  edit qualifiers stripped plus any credited artist, an NCS compilation by its album name, and a
+  few early releases that later left the site (Alan Walker's Fade and Spectre, Tobu, Ahrix). An
+  NCS release carries the NCS lockup (public domain, bundled in `web/logos/`) on the walls
+  instead of the artist's logo, as often as a headliner's, and the now-playing line says
+  "NCS release".
 - `web/js/centrepieces.js` — 21 centrepiece rigs (Martin Garrix "+", Armin's towers,
   Tiësto's arch, Hardwell's frame, Eric Prydz's HOLO screen, Swedish House Mafia's
   triangle, Carl Cox's ring, Alesso's orbit, DVBBS's X, Deadmau5 cube, Excision megawall,
@@ -158,6 +169,8 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
 
 - `curl localhost:5173/status` — tap state and current track.
 - `curl "localhost:5173/logo?artist=Martin%20Garrix&meta=1"` — logo cache entry for an artist.
+- `curl "localhost:5173/ncs?title=Link&artist=Jim%20Yosef"` — is this track an NCS release (and which catalog entry).
+- `curl localhost:5173/ncs/catalog` — the NCS catalog the server holds (`/status` reports its age and origin).
 - `TAP_DEBUG=1 npm start` — per-second callback/byte counters from the native tap.
 - `TAP_SUBDEV=1 npm start` — include the default output device in the aggregate (older behaviour).
 - `window.__stage` in the console exposes `audio`, `director` (`.show` is the live frame), `stage`, `hud`.

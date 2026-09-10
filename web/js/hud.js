@@ -24,6 +24,7 @@ export class Hud {
     this.title = this.$('title');
     this.artist = this.$('artist');
     this.showLine = this.$('show-line');
+    this.ncs = null; this.lastTrackMeta = null;   // NCS release match for the current track (main.js sets it once the catalog answers)
     this.progress = this.$('progress');
     this.toast = this.$('toast');
     this.menu = this.$('source-menu');
@@ -96,6 +97,7 @@ export class Hud {
   }
 
   setTrack(t) {
+    this.lastTrackMeta = t;
     if (!t || t.state === 'stopped' || !t.name) {
       this.title.textContent = 'Nothing playing';
       this.artist.textContent = 'Play something on Spotify';
@@ -105,9 +107,12 @@ export class Hud {
       return;
     }
     this.title.textContent = t.name;
-    this.artist.textContent = t.artist + (t.state === 'paused' ? '  ·  paused' : '');
+    const ncs = this.ncs && this.ncs.id === t.id ? '  ·  NCS release' : '';
+    this.artist.textContent = t.artist + ncs + (t.state === 'paused' ? '  ·  paused' : '');
     if (t.art && t.art !== this.lastArt) { this.lastArt = t.art; this.art.src = '/art?url=' + encodeURIComponent(t.art); }
   }
+  /** the NCS match for the current track ({id, how, title, artist} or null): "NCS release" on the artist line */
+  setNcs(m) { this.ncs = m || null; if (this.lastTrackMeta) this.setTrack(this.lastTrackMeta); }
 
   update(show, now) {
     if (now - this.lastUi < 100) return;

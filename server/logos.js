@@ -109,7 +109,10 @@ export async function resolveLogo(name, cacheDir) {
   return { found: false, tried, ts: Date.now() };
 }
 
-export function createLogoHandler(cacheDir) {
+// logos shipped with the app (web/logos), by artist slug: never looked up online
+const BUNDLED = { ncs: { file: 'ncs.png', name: 'NoCopyrightSounds' }, nocopyrightsounds: { file: 'ncs.png', name: 'NoCopyrightSounds' }, 'no-copyright-sounds': { file: 'ncs.png', name: 'NoCopyrightSounds' } };
+
+export function createLogoHandler(cacheDir, bundledDir = null) {
   fs.mkdirSync(cacheDir, { recursive: true });
   const inflight = new Map();
   const metaPath = (slug) => path.join(cacheDir, slug + '.json');
@@ -134,10 +137,12 @@ export function createLogoHandler(cacheDir) {
     const name = primaryArtist(artist);
     if (!name) { res.writeHead(400); return res.end('artist required'); }
     let m;
-    try { m = await lookup(name); } catch (e) { res.writeHead(500); return res.end(String(e)); }
+    const b = bundledDir && BUNDLED[slugify(name)];
+    if (b && fs.existsSync(path.join(bundledDir, b.file))) m = { found: true, artist: name, name: b.name, kind: 'logo', source: 'bundled', ct: 'image/png', file: path.join(bundledDir, b.file) };
+    else try { m = await lookup(name); } catch (e) { res.writeHead(500); return res.end(String(e)); }
     if (wantMeta) { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' }); return res.end(JSON.stringify(m)); }
     if (!m.found) { res.writeHead(404, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' }); return res.end(JSON.stringify({ found: false, artist: name })); }
     res.writeHead(200, { 'Content-Type': m.ct, 'Cache-Control': 'public, max-age=86400', 'X-Logo-Kind': m.kind, 'X-Logo-Source': m.source, 'X-Logo-Name': encodeURIComponent(m.name || name) });
-    fs.createReadStream(path.join(cacheDir, m.file)).pipe(res);
+    fs.createReadStream(path.isAbsolute(m.file) ? m.file : path.join(cacheDir, m.file)).pipe(res);
   };
 }

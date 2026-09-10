@@ -4,7 +4,8 @@ import { Stage } from './stage.js';
 import { Hud } from './hud.js';
 import { paletteFromArt, mergeArtPalette } from './palette.js';
 import { resolveProfile } from './artists.js';
-import { loadLogo, primaryArtist } from './logos.js';
+import { loadLogo, loadLogoUrl, primaryArtist } from './logos.js';
+import { loadNcsCatalog, NCS_LOGO, NCS_NAME } from './ncs.js';
 
 const canvas = document.getElementById('stage');
 const audio = new AudioEngine();
@@ -14,6 +15,7 @@ audio.onAnalysis = (m) => director.ingest(m);
 const stage = new Stage(canvas, director);
 const hud = new Hud(audio, stage, director);
 window.__stage = { audio, director, stage, hud };
+const ncsReady = loadNcsCatalog();   // the NoCopyrightSounds catalog (a local JSON); matches resolve once it is in
 
 // new song → artist/genre profile (stage design, palette, programs, seed) → structure reset
 let lastTrackId = null;
@@ -27,10 +29,19 @@ audio.onTrack = (t) => {
     director.resetTrack();
     stage.setProfile(profile);
     hud.setProfile(profile);
-    // the real logo (server-resolved + cached) replaces the procedural mark on the walls once it is in
+    // the real logo (server-resolved + cached) replaces the procedural mark on the walls once it is in; an NCS release
+    // (title + artist in the NoCopyrightSounds catalog, or an NCS compilation) carries the NCS mark instead
     stage.setLogoImage(null);
+    hud.setNcs(null);
     const who = primaryArtist(t.artist);
-    if (who) loadLogo(who).then((e) => { if (e && lastTrackId === t.id) stage.setLogoImage(e); });
+    ncsReady.then((ncs) => {
+      if (lastTrackId !== t.id) return;
+      const m = ncs.match(t);
+      hud.setNcs(m ? { ...m, catalogId: m.id, id: t.id } : null);
+      if (m) stage.style = { ...stage.style, logoRate: Math.max(1, stage.style.logoRate ?? 0.7) };   // the label mark shows as often as a headliner's
+      const logo = m ? loadLogoUrl(NCS_LOGO, NCS_NAME) : who ? loadLogo(who) : Promise.resolve(null);
+      logo.then((e) => { if (e && lastTrackId === t.id) stage.setLogoImage(e); });
+    });
     if (t.art && profile.style.artColors !== false) {
       paletteFromArt(t.art).then((pal) => { if (pal && lastTrackId === t.id) director.setPalette(mergeArtPalette(profile.palette, pal, profile.seed)); }).catch(() => {});
     }
@@ -44,7 +55,7 @@ document.getElementById('enter-btn').onclick = async () => {
   enter.classList.add('hide');
   try { await audio.start(); } catch (e) { console.error(e); alert('Audio start failed: ' + (e.message || e)); }
   const q = new URLSearchParams(location.search);
-  if (q.has('demo')) { try { const a = q.get('demo'); await audio.useDemo(a && a !== '1' && a !== 'true' ? a : undefined); } catch (e) { console.error(e); } }
+  if (q.has('demo')) { try { const a = q.get('demo'); await audio.useDemo(a && a !== '1' && a !== 'true' ? a : undefined, q.get('song') || undefined); } catch (e) { console.error(e); } }
   hud.refreshStatus();
 };
 

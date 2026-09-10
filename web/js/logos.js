@@ -121,6 +121,24 @@ async function fetchLogo(name) {
   return e;
 }
 
+// an image shipped with the app (web/logos/*.png) as the same kind of entry; one request per URL per session
+export function loadLogoUrl(url, name, kind = 'logo') {
+  const key = 'url:' + url;
+  let p = entries.get(key);
+  if (!p) {
+    p = (async () => {
+      const r = await fetch(url, { cache: 'force-cache' });
+      if (!r.ok) return null;
+      const img = await createImageBitmap(await r.blob());
+      const e = buildEntry(img, name, kind, 'bundled');
+      if (img.close) img.close();
+      return e;
+    })().catch((e) => { console.warn('logo', url, e.message || e); return null; });
+    entries.set(key, p);
+  }
+  return p;
+}
+
 // Promise of an entry (null when no logo exists); one request per artist per session
 export function loadLogo(artist) {
   const name = primaryArtist(artist), slug = slugify(name);

@@ -75,7 +75,7 @@ export class AudioEngine {
     this.feeder = new AudioWorkletNode(ctx, 'pcm-feeder', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
     this.currentSource = null;
     if (this.sourceKind === 'server') this.useServer();
-    else if (this.sourceKind === 'demo') { const a = this.demo?.artist; if (this.demo) { this.demo.stop(); this.demo = null; } await this.useDemo(a); }
+    else if (this.sourceKind === 'demo') { const a = this.demo?.artist, s = this.demo?.song; if (this.demo) { this.demo.stop(); this.demo = null; } await this.useDemo(a, s); }
     else if (this.currentStream) this._attachStream(this.currentStream);
     if (ctx.state !== 'running') await ctx.resume();
   }
@@ -87,12 +87,12 @@ export class AudioEngine {
     if (this.demo) { this.demo.stop(); this.demo = null; }
   }
 
-  /** built-in synthesised set (no Spotify needed); audible through the speakers at demoVolume */
-  async useDemo(artist) {
+  /** built-in synthesised set (no Spotify needed); audible through the speakers at demoVolume. song: a title for the metadata */
+  async useDemo(artist, song) {
     const { DemoTrack } = await import('./demo.js');
     this._detach(); this._stopStream();
     this.sourceKind = 'demo';
-    const d = this.demo = new DemoTrack(this.ctx, artist || 'Martin Garrix');
+    const d = this.demo = new DemoTrack(this.ctx, artist || 'Martin Garrix', song);
     d.out.connect(this.onsetTap);
     if (!this.demoMon) { this.demoMon = this.ctx.createGain(); this.demoMon.connect(this.ctx.destination); }
     this.demoMon.gain.value = this.demoVolume ?? 0.5;

@@ -4,6 +4,7 @@
 //  - polls Spotify (AppleScript) for now-playing metadata
 //  - proxies album artwork so the browser can read pixels for palette extraction
 //  - fetches + caches real artist logos (TheAudioDB / Wikidata / Commons) for the LED screens
+//  - keeps the NoCopyrightSounds catalog (ncs.io) so an NCS release gets the NCS mark on the walls
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createLogoHandler } from './logos.js';
+import { createNcs } from './ncs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -23,7 +25,8 @@ const SCRIPT = path.join(__dirname, 'spotify.applescript');
 const PORT = Number(process.env.PORT || 5173);
 const POLL_MS = 400;
 const LOGO_CACHE = path.join(ROOT, 'cache', 'logos');
-const handleLogo = createLogoHandler(LOGO_CACHE);
+const handleLogo = createLogoHandler(LOGO_CACHE, path.join(WEB, 'logos'));
+const ncs = createNcs({ cacheDir: path.join(ROOT, 'cache', 'ncs'), bundled: path.join(WEB, 'data', 'ncs.json') });
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -70,9 +73,11 @@ const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://localhost');
   if (u.pathname === '/art') return proxyArt(req, res, u.searchParams.get('url') || '');
   if (u.pathname === '/logo') return handleLogo(req, res, u.searchParams.get('artist') || '', u.searchParams.has('meta'));
+  if (u.pathname === '/ncs/catalog') return ncs.handleCatalog(req, res);
+  if (u.pathname === '/ncs') return ncs.handleMatch(req, res, u);
   if (u.pathname === '/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size }));
+    return res.end(JSON.stringify({ tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size, ncs: ncs.info() }));
   }
   if (u.pathname.startsWith('/vendor/three/')) {
     const f = safeJoin(THREE_DIR, u.pathname.slice('/vendor/three/'.length));
@@ -177,9 +182,9 @@ function pollSpotify() {
         if (lastTrack.state !== 'stopped') { lastTrack = t; broadcastJSON(t); }
         return;
       }
-      const [state, name, artist, album, art, position, duration, id] = stdout.trim().split('\t');
+      const [state, name, artist, album, art, position, duration, id, albumArtist] = stdout.trim().split('\t');
       lastTrack = {
-        type: 'track', state, name, artist, album, art, id,
+        type: 'track', state, name, artist, album, albumArtist: albumArtist || '', art, id,
         position: parseFloat(position) || 0,
         duration: (parseFloat(duration) || 0) / 1000,
         ts: Date.now(),
@@ -192,6 +197,7 @@ function pollSpotify() {
 server.listen(PORT, () => {
   console.log(`\n  Virtual-Fest  →  http://localhost:${PORT}\n`);
   startTap();
+  ncs.start();
   setInterval(pollSpotify, POLL_MS);
 });
 
