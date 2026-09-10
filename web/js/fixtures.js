@@ -459,7 +459,8 @@ export class Particles {
       uniforms: {},
       vertexShader: /* glsl */`
         attribute float size; attribute vec3 color; varying vec3 vC;
-        void main(){ vC = color; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * (300.0 / -mv.z); gl_Position = projectionMatrix * mv; }`,
+        // a dead particle (size 0) is clipped away: gl_PointSize 0 would still be clamped to a 1 px point and hang in the air
+        void main(){ vC = color; if (size <= 0.0) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; } vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * (300.0 / -mv.z); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: /* glsl */`
         varying vec3 vC;
         void main(){ float d = length(gl_PointCoord - 0.5) * 2.0; float a = 1.0 - smoothstep(0.3, 1.0, d); gl_FragColor = vec4(vC * a, a); }`,
@@ -513,14 +514,15 @@ export class Particles {
     const P = this.pos, V = this.vel, L = this.life, S = this.size, C = this.col;
     let alive = 0;
     for (let i = 0; i < this.cap; i++) {
-      if (L[i] <= 0) { if (S[i] !== 0) S[i] = 0; continue; }
-      alive++;
+      if (L[i] <= 0) { if (S[i] !== 0) { S[i] = 0; C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = 0; } continue; }
       L[i] -= dt;
+      if (L[i] <= 0) { S[i] = 0; C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = 0; continue; }   // died this frame: no size, no colour, clipped by the shader
+      alive++;
       const d = Math.exp(-dt * this.drag[i]);
       V[i * 3] *= d; V[i * 3 + 1] = V[i * 3 + 1] * d - this.grav[i] * dt; V[i * 3 + 2] *= d;
       P[i * 3] += V[i * 3] * dt; P[i * 3 + 1] += V[i * 3 + 1] * dt; P[i * 3 + 2] += V[i * 3 + 2] * dt;
       const f = L[i] / this.maxLife[i];
-      S[i] = L[i] <= 0 ? 0 : this.size0[i] * Math.max(0.05, f);
+      S[i] = this.size0[i] * Math.max(0.05, f);
       const fd = 1 - dt * this.fade[i];
       C[i * 3] *= fd; C[i * 3 + 1] *= fd; C[i * 3 + 2] *= fd;
     }
