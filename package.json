@@ -1,8 +1,9 @@
 {
-  "name": "virtual-fest",
+  "name": "virtual-music-festival",
   "version": "1.0.0",
-  "description": "Virtual festival main stage with LED/lighting show driven live by Spotify audio on your Mac",
+  "description": "A live EDM festival main stage in the browser: lights, lasers, pyro and LED walls driven in real time by whatever Spotify is playing on macOS, Linux or Windows",
   "type": "module",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "build:native": "sh native/build.sh",

@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Virtual-Fest</title>
+<title>Virtual Music Festival</title>
+<meta name="description" content="A live EDM festival main stage in your browser. The lighting, lasers, pyro and LED walls follow whatever you are playing on Spotify, in real time.">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
@@ -18,11 +19,26 @@
 <body>
 <canvas id="stage"></canvas>
 
+<div id="gate" hidden>
+  <div class="gate-inner">
+    <div class="wordmark small">VIRTUAL MUSIC<span>FESTIVAL</span></div>
+    <h2>Open this on a laptop or PC</h2>
+    <p>The main stage runs a real-time 3D light show — hundreds of moving heads, lasers, pyro and LED walls
+       rendered live on your graphics card. Phones and tablets do not have the screen or the GPU headroom
+       for it, so the show is built for laptops and desktops.</p>
+    <p class="gate-how">Visit this same address from your computer and press <b>Enter the festival</b>.</p>
+    <button id="gate-continue" class="ghost">I'm on a computer — let me in anyway</button>
+  </div>
+</div>
+
 <div id="enter">
   <div class="enter-inner">
-    <div class="wordmark">VIRTUAL<span>FEST</span></div>
-    <p class="tag">A virtual festival stage. The light show follows whatever your Mac's Spotify is playing, live.</p>
-    <button id="enter-btn">ENTER</button>
+    <div class="wordmark">VIRTUAL MUSIC<span>FESTIVAL</span></div>
+    <p class="tag">Stop only listening to EDM. <b>Watch it.</b><br>
+      A festival main stage that reads your Spotify live — every drop, build and breakdown driving the
+      lights, lasers, pyro and LED walls, with a stage design built for whichever DJ is playing.</p>
+    <button id="enter-btn">ENTER THE FESTIVAL</button>
+    <p class="enter-step" id="enter-step">Play something on Spotify and press enter.</p>
     <p class="hint"><b>F</b> fullscreen · <b>C</b> / <b>1–0</b> camera · <b>L</b> logo · <b>P</b> pyro · <b>D</b> drop · <b>- =</b> lights · <b>[ ]</b> sync · <b>H</b> hide overlay · <b>S</b> audio source</p>
   </div>
 </div>
@@ -44,7 +60,7 @@
     <div class="np-text">
       <div class="np-label">NOW PLAYING</div>
       <div class="np-title" id="title">Nothing playing</div>
-      <div class="np-artist" id="artist">Play something on Spotify</div>
+      <div class="np-artist" id="artist">Press play on Spotify</div>
       <div class="np-show" id="show-line"></div>
       <div class="np-progress"><i id="progress"></i></div>
     </div>
@@ -63,15 +79,15 @@
 </div>
 
 <div id="source-menu" hidden>
-  <h3>Audio source</h3>
-  <button data-src="server">Spotify tap (native, recommended)</button>
-  <button data-src="screen">Screen / tab audio share</button>
-  <button data-src="demo">Built-in demo set (no Spotify needed)</button>
+  <h3>Where the music comes from</h3>
+  <button data-src="server"><b>This computer's audio</b><small id="src-server-note">Captured by the server and streamed to every browser watching.</small></button>
+  <button data-src="screen"><b>Share a tab or your screen</b><small>Pick the Spotify tab and tick "Share tab audio". Needs https:// or localhost.</small></button>
+  <button data-src="demo"><b>Built-in demo set</b><small>A synthesised EDM set — run the whole show with no Spotify at all.</small></button>
   <div class="row">
     <select id="device-select"></select>
-    <button data-src="device">Use input device</button>
+    <button data-src="device">Use input</button>
   </div>
-  <p class="small">Native tap captures Spotify's own audio on macOS 14.2+. If macOS asked for a "System Audio Recording" permission, grant it to your terminal and restart the server.</p>
+  <p class="small" id="source-note"></p>
   <button class="close" id="source-close">Close</button>
 </div>
 

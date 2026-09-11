@@ -203,7 +203,7 @@ export const PROGRAMS = {
     const opts = {
       t: o.t, beat: show.beatPulse, reveal, revealMode: lg.mode || 'wipe', glitch: lg.glitch || 0,
       color: hot || s.style < 0.5 ? '#ffffff' : col.a, color2: col.c, bg: '#000000',
-      text: pr.markText || (o.track?.artist || '').split(/,|&|feat/i)[0].trim().toUpperCase() || 'VIRTUAL-FEST',
+      text: pr.markText || (o.track?.artist || '').split(/,|&|feat/i)[0].trim().toUpperCase() || 'VIRTUAL MUSIC FESTIVAL',
       invert: !img && hot && show.kick > 0.6 && s.style > 0.65,
       logoImg: img,
     };

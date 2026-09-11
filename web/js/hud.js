@@ -1,4 +1,6 @@
 // HUD: status pill, BPM/phase/sync, meters, now-playing (+ artist profile line), source menu, toasts.
+import { captureCopy, sourceNote, enterStep, secure } from './config.js';
+
 const GENRE_LABEL = {
   bigroom: 'Big Room', progressive: 'Progressive House', future: 'Future House', bass: 'Bass House', electro: 'Electro House',
   trance: 'Trance', psytrance: 'Psytrance', hardstyle: 'Hardstyle', techno: 'Techno', hardtechno: 'Hard Techno', afterlife: 'Melodic Techno',
@@ -51,11 +53,37 @@ export class Hud {
           else if (src === 'device') await audio.useDevice(this.deviceSelect.value || undefined);
           this.menu.hidden = true;
           this.director.setLead(this.director.nudge); // re-read base latency for the new source
-        } catch (e) { alert('Could not switch source: ' + (e.message || e)); }
+        } catch (e) { console.error(e); this.fail('Could not switch source: ' + (e.message || e)); }
       };
     }
     audio.onStatus = () => this.refreshStatus();
     this.refreshStatus();
+  }
+
+  /** /config from the host: what it can capture, whether it has track names and artwork. Drives the copy. */
+  setConfig(cfg) {
+    this.config = cfg || null;
+    const step = this.$('enter-step');
+    if (step) step.textContent = enterStep(cfg);
+    const serverNote = this.$('src-server-note');
+    if (serverNote) serverNote.textContent = captureCopy(cfg).note;
+    this.noteBase = sourceNote(cfg);
+    const note = this.$('source-note');
+    if (note) note.textContent = this.noteBase;
+    // a tab share needs getDisplayMedia, which needs a secure context; no capture backend means no server source
+    const screenBtn = this.menu.querySelector('[data-src="screen"]');
+    if (screenBtn) screenBtn.disabled = !secure();
+    const serverBtn = this.menu.querySelector('[data-src="server"]');
+    if (serverBtn && cfg && cfg.capture === 'none') serverBtn.disabled = true;
+    if (cfg && cfg.artwork === false && this.art) this.art.hidden = true;   // Windows gives no album art
+  }
+
+  /** A source failed to start: say so where it can be read, and open the menu so another can be picked. */
+  fail(msg) {
+    this.flash(msg, 5000);
+    const note = this.$('source-note');
+    if (note) note.textContent = msg + '  ·  ' + (this.noteBase || '');
+    this.openMenu();
   }
 
   async openMenu() {
@@ -100,7 +128,7 @@ export class Hud {
     this.lastTrackMeta = t;
     if (!t || t.state === 'stopped' || !t.name) {
       this.title.textContent = 'Nothing playing';
-      this.artist.textContent = 'Play something on Spotify';
+      this.artist.textContent = 'Press play on Spotify';
       if (this.showLine) this.showLine.textContent = '';
       this.art.removeAttribute('src');
       this.lastArt = null;

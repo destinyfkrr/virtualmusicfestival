@@ -39,7 +39,7 @@ export class DemoTrack {
   position() { return Math.max(0, this.ctx.currentTime - this.startAt) % this.duration(); }
   section() { return this._sectionAt(Math.floor(Math.max(0, this.ctx.currentTime - this.startAt) * BPM / 240)).name; }
   track() {
-    return { type: 'track', state: 'playing', name: this.song || 'Demo Set (' + this.section() + ')', artist: this.artist, album: 'Virtual-Fest built-in demo',
+    return { type: 'track', state: 'playing', name: this.song || 'Demo Set (' + this.section() + ')', artist: this.artist, album: 'Virtual Music Festival built-in demo',
       art: '', id: 'demo:' + (this.artist + (this.song ? ' ' + this.song : '')).toLowerCase().replace(/[^a-z0-9]+/g, '-') + ':' + Math.round(this.startAt * 1000), position: this.position(), duration: this.duration(), ts: Date.now() };
   }
 

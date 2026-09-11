@@ -1,4 +1,4 @@
-// Virtual-Fest — the virtual main stage.
+// Virtual Music Festival — the virtual main stage.
 //  - set geometry (deck, booth, LED walls, trusses, towers), built 4x life size around a human-scale crowd
 //  - fixture rigs: ~210 moving heads, ~165 strobes/blinders, 31 laser sources (~235 beams),
 //    ~3.8k rig pixels + the artist centrepiece (another 0.5–1.5k pixels, kinetic parts, holo screens)

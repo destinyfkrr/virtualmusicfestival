@@ -6,6 +6,7 @@ import { paletteFromArt, mergeArtPalette } from './palette.js';
 import { resolveProfile } from './artists.js';
 import { loadLogo, loadLogoUrl, primaryArtist } from './logos.js';
 import { loadNcsCatalog, NCS_LOGO, NCS_NAME } from './ncs.js';
+import { loadConfig, isSmallScreen } from './config.js';
 
 const canvas = document.getElementById('stage');
 const audio = new AudioEngine();
@@ -50,10 +51,29 @@ audio.onTrack = (t) => {
   if (t.state === 'playing' && Number.isFinite(t.position)) director.setPosition(t.position, audio.now());
 };
 
+// what the host machine can capture drives the splash copy and the source menu, so a Linux or Windows
+// host never reads like a Mac and a server with no capture backend says so before you press enter
+const gate = document.getElementById('gate');
 const enter = document.getElementById('enter');
+loadConfig().then((cfg) => hud.setConfig(cfg));
+
+// phones and tablets get told to come back on a computer, with a way past it for anyone who knows better.
+// re-checked on resize because a phone reports its real viewport only once layout has settled
+let waved = false;
+try { waved = !!sessionStorage.getItem('vmf-continue-anyway'); } catch {}
+const checkGate = () => { gate.hidden = waved || !isSmallScreen(); };
+checkGate();
+addEventListener('load', checkGate);
+addEventListener('resize', checkGate);
+document.getElementById('gate-continue').onclick = () => {
+  waved = true;
+  try { sessionStorage.setItem('vmf-continue-anyway', '1'); } catch {}
+  gate.hidden = true;
+};
+
 document.getElementById('enter-btn').onclick = async () => {
   enter.classList.add('hide');
-  try { await audio.start(); } catch (e) { console.error(e); alert('Audio start failed: ' + (e.message || e)); }
+  try { await audio.start(); } catch (e) { console.error(e); hud.fail('Audio start failed: ' + (e.message || e)); }
   const q = new URLSearchParams(location.search);
   if (q.has('demo')) { try { const a = q.get('demo'); await audio.useDemo(a && a !== '1' && a !== 'true' ? a : undefined, q.get('song') || undefined); } catch (e) { console.error(e); } }
   hud.refreshStatus();

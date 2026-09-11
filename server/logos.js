@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const UA = 'Virtual-Fest/1.0 (local festival visualiser; node fetch)';
+const UA = 'VirtualMusicFestival/1.0 (local festival visualiser; node fetch)';
 const MISS_TTL = 7 * 24 * 3600e3;
 const MAX_BYTES = 8e6;
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/gif': 'gif' };
