@@ -7,6 +7,7 @@
 //  - keeps the NoCopyrightSounds catalog (ncs.io) so an NCS release gets the NCS mark on the walls
 
 import http from 'node:http';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
@@ -23,6 +24,7 @@ const TAP_BIN = path.join(ROOT, 'native', 'spotifytap');
 const TAP_BUILD = path.join(ROOT, 'native', 'build.sh');
 const SCRIPT = path.join(__dirname, 'spotify.applescript');
 const PORT = Number(process.env.PORT || 5173);
+const HOST = process.env.HOST || '0.0.0.0';
 const POLL_MS = 400;
 const LOGO_CACHE = path.join(ROOT, 'cache', 'logos');
 const handleLogo = createLogoHandler(LOGO_CACHE, path.join(WEB, 'logos'));
@@ -194,8 +196,20 @@ function pollSpotify() {
   });
 }
 
-server.listen(PORT, () => {
-  console.log(`\n  Virtual-Fest  →  http://localhost:${PORT}\n`);
+function lanAddresses() {
+  const out = [];
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const i of ifaces || []) if (i.family === 'IPv4' && !i.internal) out.push(i.address);
+  }
+  return out;
+}
+
+server.listen(PORT, HOST, () => {
+  console.log(`\n  Virtual-Fest  →  http://localhost:${PORT}`);
+  if (HOST === '0.0.0.0' || HOST === '::') {
+    for (const addr of lanAddresses()) console.log(`                →  http://${addr}:${PORT}`);
+  }
+  console.log('');
   startTap();
   ncs.start();
   setInterval(pollSpotify, POLL_MS);
