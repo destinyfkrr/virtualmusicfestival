@@ -23,23 +23,24 @@
   <div class="gate-inner">
     <div class="wordmark small">VIRTUAL MUSIC<span>FESTIVAL</span></div>
     <h2>Open this on a laptop or PC</h2>
-    <p>The main stage runs a real-time 3D light show — hundreds of moving heads, lasers, pyro and LED walls
-       rendered live on your graphics card. Phones and tablets do not have the screen or the GPU headroom
-       for it, so the show is built for laptops and desktops.</p>
+    <p>The main stage is a real-time 3D light show: hundreds of moving heads, lasers, pyro and LED
+       walls rendered live on your graphics card. Phones and tablets do not have the screen or the
+       GPU headroom for it, so the show is built for laptops and desktops.</p>
     <p class="gate-how">Visit this same address from your computer and press <b>Enter the festival</b>.</p>
-    <button id="gate-continue" class="ghost">I'm on a computer — let me in anyway</button>
+    <button id="gate-continue" class="ghost">I'm on a computer, let me in anyway</button>
   </div>
 </div>
 
 <div id="enter">
+  <video id="bg" src="background.mp4" autoplay muted loop playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
   <div class="enter-inner">
     <div class="wordmark">VIRTUAL MUSIC<span>FESTIVAL</span></div>
     <p class="tag">Stop only listening to EDM. <b>Watch it.</b><br>
-      A festival main stage that reads your Spotify live — every drop, build and breakdown driving the
-      lights, lasers, pyro and LED walls, with a stage design built for whichever DJ is playing.</p>
+      A festival main stage that reads your Spotify live. Every drop, build and breakdown drives the
+      lights, lasers, pyro and LED walls, on a stage design built for whichever DJ is playing.</p>
     <button id="enter-btn">ENTER THE FESTIVAL</button>
     <p class="enter-step" id="enter-step">Play something on Spotify and press enter.</p>
-    <p class="hint"><b>F</b> fullscreen · <b>C</b> / <b>1–0</b> camera · <b>L</b> logo · <b>P</b> pyro · <b>D</b> drop · <b>- =</b> lights · <b>[ ]</b> sync · <b>H</b> hide overlay · <b>S</b> audio source</p>
+    <p class="hint"><b>F</b> fullscreen · <b>C</b> / <b>1-0</b> camera · <b>L</b> logo · <b>P</b> pyro · <b>D</b> drop · <b>- =</b> lights · <b>[ ]</b> sync · <b>H</b> hide overlay · <b>S</b> audio source</p>
   </div>
 </div>
 
@@ -47,9 +48,9 @@
   <div class="top-left">
     <div class="pill" id="source-pill"><span class="dot"></span><span id="source-text">connecting</span></div>
     <div class="meters">
-      <div class="meter"><label>BPM</label><b id="bpm">—</b></div>
+      <div class="meter"><label>BPM</label><b id="bpm">-</b></div>
       <div class="meter"><label>PHASE</label><b id="phase">idle</b></div>
-      <div class="meter"><label>SYNC</label><b id="sync">—</b></div>
+      <div class="meter"><label>SYNC</label><b id="sync">-</b></div>
       <div class="meter bar"><label>ENERGY</label><i id="energy"></i></div>
       <div class="meter bar"><label>BASS</label><i id="bass"></i></div>
     </div>
@@ -82,7 +83,7 @@
   <h3>Where the music comes from</h3>
   <button data-src="server"><b>This computer's audio</b><small id="src-server-note">Captured by the server and streamed to every browser watching.</small></button>
   <button data-src="screen"><b>Share a tab or your screen</b><small>Pick the Spotify tab and tick "Share tab audio". Needs https:// or localhost.</small></button>
-  <button data-src="demo"><b>Built-in demo set</b><small>A synthesised EDM set — run the whole show with no Spotify at all.</small></button>
+  <button data-src="demo"><b>Built-in demo set</b><small>A synthesised EDM set, so the whole show runs with no Spotify at all.</small></button>
   <div class="row">
     <select id="device-select"></select>
     <button data-src="device">Use input</button>

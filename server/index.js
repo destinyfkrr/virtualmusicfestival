@@ -39,14 +39,33 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.woff2': 'font/woff2',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
 };
 
 const ART_HOSTS = new Set(['i.scdn.co', 'mosaic.scdn.co', 'image-cdn-ak.spotifycdn.com', 'image-cdn-fa.spotifycdn.com']);
 
-function sendFile(res, file) {
+// Range requests matter for the splash video: Safari will not start a <video> at all unless the
+// server answers 206, and a seek or a loop restart is a range request in every browser.
+function sendFile(res, file, req) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); res.end('not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    const type = MIME[path.extname(file)] || 'application/octet-stream';
+    const media = type.startsWith('video/') || type.startsWith('audio/');
+    const head = { 'Content-Type': type, 'Cache-Control': media ? 'public, max-age=3600' : 'no-cache' };
+    const range = media && req ? /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '') : null;
+    if (media) head['Accept-Ranges'] = 'bytes';
+    if (range && (range[1] || range[2])) {
+      let start = range[1] ? Number(range[1]) : st.size - Number(range[2]);
+      let end = range[1] && range[2] ? Number(range[2]) : st.size - 1;
+      start = Math.max(0, start); end = Math.min(st.size - 1, end);
+      if (start > end) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); res.end(); return; }
+      res.writeHead(206, { ...head, 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1 });
+      fs.createReadStream(file, { start, end }).pipe(res);
+      return;
+    }
+    res.writeHead(200, { ...head, 'Content-Length': st.size });
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -103,11 +122,11 @@ const handler = (req, res) => {
   if (u.pathname === '/status') return sendJSON(res, { tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size, ncs: ncs.info(), ...config() });
   if (u.pathname.startsWith('/vendor/three/')) {
     const f = safeJoin(THREE_DIR, u.pathname.slice('/vendor/three/'.length));
-    return f ? sendFile(res, f) : (res.writeHead(403), res.end());
+    return f ? sendFile(res, f, req) : (res.writeHead(403), res.end());
   }
   const rel = u.pathname === '/' ? 'index.html' : u.pathname.slice(1);
   const f = safeJoin(WEB, rel);
-  return f ? sendFile(res, f) : (res.writeHead(403), res.end());
+  return f ? sendFile(res, f, req) : (res.writeHead(403), res.end());
 };
 
 // https:// unlocks AudioWorklet (and screen sharing) for anyone opening the show from another

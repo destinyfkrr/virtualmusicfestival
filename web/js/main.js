@@ -65,6 +65,10 @@ const checkGate = () => { gate.hidden = waved || !isSmallScreen(); };
 checkGate();
 addEventListener('load', checkGate);
 addEventListener('resize', checkGate);
+// Safari in Low Power Mode ignores the autoplay attribute but honours a play() call
+const bg = document.getElementById('bg');
+if (bg) bg.play().catch(() => {});
+
 document.getElementById('gate-continue').onclick = () => {
   waved = true;
   try { sessionStorage.setItem('vmf-continue-anyway', '1'); } catch {}
@@ -73,6 +77,8 @@ document.getElementById('gate-continue').onclick = () => {
 
 document.getElementById('enter-btn').onclick = async () => {
   enter.classList.add('hide');
+  // stop decoding the splash clip once the stage is on
+  if (bg) setTimeout(() => { bg.pause(); bg.removeAttribute('src'); bg.load(); }, 900);
   try { await audio.start(); } catch (e) { console.error(e); hud.fail('Audio start failed: ' + (e.message || e)); }
   const q = new URLSearchParams(location.search);
   if (q.has('demo')) { try { const a = q.get('demo'); await audio.useDemo(a && a !== '1' && a !== 'true' ? a : undefined, q.get('song') || undefined); } catch (e) { console.error(e); } }

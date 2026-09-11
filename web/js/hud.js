@@ -145,7 +145,7 @@ export class Hud {
   update(show, now) {
     if (now - this.lastUi < 100) return;
     this.lastUi = now;
-    this.bpm.textContent = show.bpm && show.confidence > 0.2 ? Math.round(show.bpm) : '—';
+    this.bpm.textContent = show.bpm && show.confidence > 0.2 ? Math.round(show.bpm) : '-';
     this.phase.textContent = show.phase + (show.phase !== 'idle' && show.phraseTrust > 0.5 ? ' ✓' : '');
     if (this.sync) {
       const locked = !!show.tempoLocked;

@@ -3,3 +3,4 @@ native/spotifytap
 cache/
 .DS_Store
 *.log
+background/
