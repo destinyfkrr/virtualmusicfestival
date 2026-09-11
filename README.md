@@ -1,50 +1,153 @@
-# Virtual-Fest — Spotify-reactive virtual festival
+# Virtual Music Festival
 
-A Tomorrowland / Ultra style festival rendered in the browser (three.js): a main stage whose LED
-walls, moving heads, strobes, lasers, pixel architecture, CO2 jets, flames, cold sparks and
-fireworks react in real time to whatever your Mac's Spotify app is playing — beat-grid locked, with a
-per-artist stage design, a per-song colour theme and the artist's real logo on the screens —
-set in full festival grounds (crowd, lighting towers, ferris wheel, drop tower, entrance gate,
-festoons, sky). The set is built four times life size around a human-scale crowd, the way the
-big festival main stages dwarf the field in front of them, the DJ (or duo / trio) plays the set in
-the booth, and every camera stays on the stage.
+**Stop only listening to EDM. Watch it.**
 
-Audio is captured with a macOS Core Audio *process tap* (macOS 14.2+), so no virtual audio
-driver (BlackHole etc.) is needed and Spotify keeps playing through your speakers.
-Track metadata (title, artist, artwork, playback position) comes from Spotify via AppleScript.
+A Tomorrowland / Ultra style festival main stage rendered live in the browser (three.js), driven by
+whatever your Spotify is playing. LED walls, moving heads, strobes, lasers, pixel architecture, CO2
+jets, flames, cold sparks and fireworks run to the beat grid of the actual song — with a per-artist
+stage design, a per-song colour theme and the artist's real logo on the screens — set in full
+festival grounds (20k crowd, lighting towers, ferris wheel, drop tower, entrance gate, festoons,
+black star sky). The set is built four times life size around a human-scale crowd, the way the big
+main stages dwarf the field in front of them; the DJ (or duo / trio) plays the set in the booth with
+an IMAG feed on the wings, and all 11 cameras stay on the stage.
+
+- **180+ artist profiles** across 21 EDM genres — Martin Garrix's "+", Armin's towers, Tiësto's arch,
+  Hardwell's frame, Eric Prydz's HOLO, Swedish House Mafia's triangle, Carl Cox's ring, the deadmau5
+  cube, the Excision megawall… Unknown artists get their genre's rig.
+- **21 centrepiece designs, 27 LED wall programs, 5 colour-theme modes** — no two songs look alike.
+- **Real artist logos**, fetched and cached; **NoCopyrightSounds** releases carry the NCS mark.
+- **Runs on macOS, Linux and Windows**, and anyone on your network can watch the same show in their
+  own browser.
+
+This is a local app, not a service: it runs on your machine, reads your own Spotify, and talks to
+nothing but the logo/NCS lookups. There is no account and no Spotify login.
 
 ## Run
 
 ```sh
 npm install
-npm start          # builds native/spotifytap on first run, serves http://localhost:5173
+npm start          # serves http://localhost:5173
 ```
 
-Open http://localhost:5173, press **ENTER**, play something in Spotify.
+Open <http://localhost:5173>, press **ENTER THE FESTIVAL**, press play in Spotify.
 
-The first time the tap starts, macOS asks to allow your terminal app to record system
-audio. Accept it (System Settings → Privacy & Security → Screen & System Audio Recording).
-If you denied it, re-enable it there and restart `npm start`.
+Node 18+ (developed on Node 24). Then, per platform:
 
-Requirements: macOS 14.2 or newer, Xcode command line tools (`swiftc`), Node 18+.
+### macOS
 
-### Demo set (no Spotify)
+Audio is captured with a Core Audio **process tap** (macOS 14.2+) that reads Spotify's own output —
+no virtual audio driver (BlackHole etc.), and Spotify keeps playing through your speakers. The tap
+binary builds itself on first run, so you need the Xcode command line tools (`xcode-select --install`
+gives you `swiftc`). The first start asks to let your terminal record system audio: accept it
+(System Settings → Privacy & Security → Screen & System Audio Recording) and restart `npm start`.
+Track title, artist, artwork and playback position come from Spotify over AppleScript.
 
-Open http://localhost:5173/?demo — a built-in synthesised 135 s EDM arrangement
+### Linux
+
+Audio comes from the default sink's **monitor** source, so it follows whatever is coming out of the
+speakers. Install the recorder and the metadata reader:
+
+```sh
+sudo apt install pulseaudio-utils playerctl     # Debian / Ubuntu  (or pipewire-utils for pw-record)
+sudo dnf install pulseaudio-utils playerctl     # Fedora
+sudo pacman -S libpulse playerctl               # Arch
+```
+
+`parec` is used when present, otherwise `pw-record` (PipeWire). Metadata (title, artist, album,
+artwork, position) comes from Spotify over MPRIS through `playerctl`.
+
+### Windows
+
+Windows has no always-present loopback device, so audio goes through **ffmpeg** and a loopback input:
+
+1. Install ffmpeg and put it on `PATH` (`winget install Gyan.FFmpeg`).
+2. Enable **Stereo Mix** (Sound settings → More sound settings → Recording → right-click → Show
+   Disabled Devices → enable Stereo Mix), or install [VB-CABLE](https://vb-audio.com/Cable/) or
+   VoiceMeeter and play Spotify into it.
+3. `npm start`. The server auto-detects Stereo Mix / What U Hear / CABLE Output / VoiceMeeter Out /
+   Loopback. If it picks the wrong one, run `ffmpeg -list_devices true -f dshow -i dummy` and set
+   `VF_AUDIO_DEVICE` to the exact device name.
+
+Track title, artist, album and position come from Windows itself (the same session info the media
+overlay shows), read through Windows PowerShell 5.1; if that fails it falls back to Spotify's window
+title. **Windows exposes no album artwork**, so the artwork-derived colour blend is skipped there —
+the artist and genre palettes still drive the whole show.
+
+### Any platform: bring your own capture
+
+Set `VF_AUDIO_CMD` to any command that writes **float32 little-endian, mono, 48 kHz PCM to stdout**
+and it is used instead of the built-in backends:
+
+```sh
+VF_AUDIO_CMD='ffmpeg -f pulse -i my.monitor -ac 1 -ar 48000 -f f32le -' npm start
+```
+
+## Watching from another device on your network
+
+The server listens on every interface, so the show is at `http://<your-lan-ip>:5173` for anything on
+the same Wi-Fi — a second laptop, a TV browser, the projector in the room. It prints the addresses on
+startup. The audio and the track info still come from the machine running the server, so every viewer
+sees the same show, in sync, without any Spotify setup of their own.
+
+One browser caveat: `AudioWorklet` and tab sharing are **secure-context only**, and a plain
+`http://192.168.x.x` address is not a secure context. Over LAN http the app falls back to a
+`ScriptProcessorNode` path automatically (this is what fixes
+`undefined is not an object (evaluating 'ctx.audioWorklet.addModule')`), which costs about 20 ms of
+extra latency and is compensated for in the sync. To get the tighter path, serve it over TLS:
+
+```sh
+# a self-signed pair is enough on a home network; browsers will warn once
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 -keyout key.pem -out cert.pem -subj "/CN=$(hostname)"
+VF_TLS_CERT=cert.pem VF_TLS_KEY=key.pem npm start     # now https://<your-lan-ip>:5173
+```
+
+Phones and tablets get a "come back on a computer" notice — the show wants a wide screen and a real
+GPU — with a *let me in anyway* button for small laptops and desktops that report a touch screen.
+
+## Environment variables
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `5173` | HTTP/WS port |
+| `HOST` | `0.0.0.0` | Bind address — set `127.0.0.1` to keep it off the network |
+| `VF_POLL_MS` | `400` | How often the now-playing metadata is polled |
+| `VF_AUDIO_CMD` | — | Your own capture command (float32le mono 48 kHz on stdout) |
+| `VF_AUDIO_DEVICE` | auto | Windows: the exact dshow device name to record |
+| `VF_TLS_CERT` / `VF_TLS_KEY` | — | Serve https instead of http (both required) |
+| `TAP_DEBUG` | — | macOS: per-second callback/byte counters from the native tap |
+| `TAP_SUBDEV` | — | macOS: include the default output device in the aggregate |
+
+`curl localhost:5173/config` reports what the host resolved: capture backend, metadata, artwork, TLS.
+
+## Demo set (no Spotify)
+
+Open <http://localhost:5173/?demo> — a built-in synthesised 135 s EDM arrangement
 (intro → groove → build → drop → breakdown → build → drop) plays through the speakers and drives
 the show. Add an artist to get their rig, logo and colour treatment:
 `/?demo=Armin%20van%20Buuren`, `/?demo=Charlotte%20de%20Witte`, … (default: Martin Garrix).
 Add `&song=` to give the set a real title, e.g. `/?demo=Jim%20Yosef&song=Link` plays the demo
 as an NCS release (NCS mark on the walls, "NCS release" on the now-playing line).
 
+## Why it reads your own audio instead of using the Spotify API
+
+Spotify's `/v1/audio-features` and `/v1/audio-analysis` endpoints (tempo, beats, bars, sections) were
+deprecated on 27 November 2024 and now return 403 for every new app, so the beat grid has to be
+derived from the audio itself. The Web Playback SDK cannot help either: its audio is Widevine/EME
+protected inside an iframe and never reaches an `AnalyserNode`
+([spotify/web-playback-sdk#25](https://github.com/spotify/web-playback-sdk/issues/25)). And a new
+Spotify app in Development Mode is capped at 5 users, with Extended Quota needing a registered
+business. Reading the machine's own audio has none of those limits — and it works for anything that
+makes sound, not just Spotify.
+
 ## Fallback audio sources
 
 Press **S** (or the *Source* button):
 
-- **Spotify tap** — native capture (default).
-- **Screen / tab audio** — share a Chrome tab or the screen with audio.
-- **Input device** — any input, e.g. a loopback device.
-- **Demo set** — the built-in arrangement above.
+- **This computer's audio** — the host capture above (default), streamed to every browser watching.
+- **Share a tab or your screen** — pick the Spotify tab and tick "Share tab audio". Needs https or
+  localhost, so it is greyed out when you opened the page over plain LAN http.
+- **Use input** — any input device, e.g. a loopback interface.
+- **Built-in demo set** — the synthesised arrangement above, no Spotify at all.
 
 ## Keys and buttons
 
@@ -167,6 +270,8 @@ The buttons bottom-right do the same: *Source*, *Camera*, *Logo*, *Pyro*, *Light
 
 ## Debugging
 
+- `curl localhost:5173/config` — what the host resolved: capture backend, metadata, artwork, TLS.
+- `curl localhost:5173/healthz` — liveness, tap state, connected browsers, uptime.
 - `curl localhost:5173/status` — tap state and current track.
 - `curl "localhost:5173/logo?artist=Martin%20Garrix&meta=1"` — logo cache entry for an artist.
 - `curl "localhost:5173/ncs?title=Link&artist=Jim%20Yosef"` — is this track an NCS release (and which catalog entry).
