@@ -1,3 +1,5 @@
+import { createFeederFallback, createOnsetFallback, hasAudioWorklet } from './fallback-nodes.js';
+
 // AudioEngine: owns the AudioContext + AnalyserNode and the audio source
 // (native Spotify tap over WebSocket, an input device, screen-share audio, or the built-in demo set).
 // Produces per-frame spectral features for the ShowDirector.
@@ -20,6 +22,7 @@ export class AudioEngine {
     this.currentSource = null;   // node currently feeding the analyser
     this.currentStream = null;   // MediaStream (device/screen sources)
     this.sourceKind = 'server';
+    this.worklets = true;        // false when we had to fall back to ScriptProcessorNode
     this.fmt = { sampleRate: 48000, channels: 1 };
     this.ws = null;
     this.wsOpen = false;
@@ -58,10 +61,19 @@ export class AudioEngine {
   async ensureContext(rate) {
     if (this.ctx && this.ctx.sampleRate === rate) { if (this.ctx.state !== 'running') await this.ctx.resume(); return; }
     if (this.ctx) { try { await this.ctx.close(); } catch {} }
-    const ctx = new AudioContext({ sampleRate: rate, latencyHint: 'interactive' });
+    const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AC) throw new Error('This browser has no Web Audio support. Open the show in Chrome, Edge, Firefox or Safari on a laptop or PC.');
+    const ctx = new AC({ sampleRate: rate, latencyHint: 'interactive' });
     this.ctx = ctx; this.demoMon = null;
-    await ctx.audioWorklet.addModule('js/pcm-worklet.js');
-    await ctx.audioWorklet.addModule('js/analysis-worklet.js');
+    // AudioWorklet is only defined in a secure context. Opened over plain http:// from another
+    // machine (http://192.168.x.x:5173) it is missing, so fall back to ScriptProcessorNode.
+    this.worklets = hasAudioWorklet(ctx);
+    if (this.worklets) {
+      await ctx.audioWorklet.addModule('js/pcm-worklet.js');
+      await ctx.audioWorklet.addModule('js/analysis-worklet.js');
+    } else {
+      console.warn('[audio] no AudioWorklet on an insecure origin - using ScriptProcessorNode. Serve over https:// for the tighter path.');
+    }
     this.analyser = ctx.createAnalyser();
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.45;
@@ -69,10 +81,14 @@ export class AudioEngine {
     this.mute.gain.value = 0; // we only analyse; Spotify itself plays through the speakers
     this.analyser.connect(this.mute).connect(ctx.destination);
     // onset tap: every source is routed source -> onsetTap -> analyser
-    this.onsetTap = new AudioWorkletNode(ctx, 'onset-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit' });
+    this.onsetTap = this.worklets
+      ? new AudioWorkletNode(ctx, 'onset-tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1, channelCountMode: 'explicit' })
+      : createOnsetFallback(ctx);
     this.onsetTap.port.onmessage = (e) => { this.lastHopAt = performance.now(); this.onAnalysis?.(e.data); };
     this.onsetTap.connect(this.analyser);
-    this.feeder = new AudioWorkletNode(ctx, 'pcm-feeder', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] });
+    this.feeder = this.worklets
+      ? new AudioWorkletNode(ctx, 'pcm-feeder', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] })
+      : createFeederFallback(ctx);
     this.currentSource = null;
     if (this.sourceKind === 'server') this.useServer();
     else if (this.sourceKind === 'demo') { const a = this.demo?.artist, s = this.demo?.song; if (this.demo) { this.demo.stop(); this.demo = null; } await this.useDemo(a, s); }
@@ -184,7 +200,10 @@ export class AudioEngine {
   /** audio-clock time in seconds (what the onset tap timestamps are measured against) */
   now() { return this.ctx ? this.ctx.currentTime : performance.now() / 1000; }
   /** how far the analysed audio is behind what the speakers play, in seconds (source dependent) */
-  baseLatency() { return this.sourceKind === 'server' ? 0.075 : this.sourceKind === 'demo' ? 0.02 : 0.035; }
+  baseLatency() {
+    const base = this.sourceKind === 'server' ? 0.075 : this.sourceKind === 'demo' ? 0.02 : 0.035;
+    return base + (this.worklets ? 0 : 0.021);   // ScriptProcessorNode reports a block late
+  }
 
   analyse() {
     const f = this.features;
