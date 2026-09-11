@@ -1,31 +1,30 @@
-// Virtual-Fest server
+// Virtual Music Festival — server
 //  - serves the web app + three.js from node_modules
-//  - supervises the native Spotify audio tap and streams raw Float32 PCM over WebSocket
-//  - polls Spotify (AppleScript) for now-playing metadata
+//  - captures whatever the machine is playing (macOS / Linux / Windows) and streams raw Float32 PCM over WebSocket
+//  - polls the platform for Spotify's now-playing metadata
 //  - proxies album artwork so the browser can read pixels for palette extraction
 //  - fetches + caches real artist logos (TheAudioDB / Wikidata / Commons) for the LED screens
 //  - keeps the NoCopyrightSounds catalog (ncs.io) so an NCS release gets the NCS mark on the walls
 
 import http from 'node:http';
+import https from 'node:https';
 import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createLogoHandler } from './logos.js';
 import { createNcs } from './ncs.js';
+import { createAudioSource } from './audio-source.js';
+import { createMetadata } from './metadata.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
 const THREE_DIR = path.join(ROOT, 'node_modules', 'three');
-const TAP_BIN = path.join(ROOT, 'native', 'spotifytap');
-const TAP_BUILD = path.join(ROOT, 'native', 'build.sh');
-const SCRIPT = path.join(__dirname, 'spotify.applescript');
 const PORT = Number(process.env.PORT || 5173);
 const HOST = process.env.HOST || '0.0.0.0';
-const POLL_MS = 400;
+const POLL_MS = Number(process.env.VF_POLL_MS || 400);
 const LOGO_CACHE = path.join(ROOT, 'cache', 'logos');
 const handleLogo = createLogoHandler(LOGO_CACHE, path.join(WEB, 'logos'));
 const ncs = createNcs({ cacheDir: path.join(ROOT, 'cache', 'ncs'), bundled: path.join(WEB, 'data', 'ncs.json') });
@@ -57,6 +56,11 @@ function safeJoin(base, rel) {
   return p.startsWith(base) ? p : null;
 }
 
+function sendJSON(res, obj, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+
 async function proxyArt(req, res, url) {
   let target;
   try { target = new URL(url); } catch { res.writeHead(400); res.end('bad url'); return; }
@@ -71,16 +75,32 @@ async function proxyArt(req, res, url) {
   }
 }
 
-const server = http.createServer((req, res) => {
+// what the machine can offer this browser, so the UI can describe the right next step
+function config() {
+  return {
+    app: 'Virtual Music Festival',
+    platform: process.platform,
+    tap: tapState,
+    // the native capture backend by platform, for the source menu's wording
+    capture: process.env.VF_AUDIO_CMD ? 'custom' :
+      process.platform === 'darwin' ? 'coreaudio' :
+      process.platform === 'linux' ? 'pulse' :
+      process.platform === 'win32' ? 'dshow' : 'none',
+    metadata: ['darwin', 'linux', 'win32'].includes(process.platform),
+    artwork: process.platform !== 'win32',   // the Windows transport controls do not hand out artwork
+    tls: !!TLS,
+  };
+}
+
+const handler = (req, res) => {
   const u = new URL(req.url, 'http://localhost');
   if (u.pathname === '/art') return proxyArt(req, res, u.searchParams.get('url') || '');
   if (u.pathname === '/logo') return handleLogo(req, res, u.searchParams.get('artist') || '', u.searchParams.has('meta'));
   if (u.pathname === '/ncs/catalog') return ncs.handleCatalog(req, res);
   if (u.pathname === '/ncs') return ncs.handleMatch(req, res, u);
-  if (u.pathname === '/status') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size, ncs: ncs.info() }));
-  }
+  if (u.pathname === '/config') return sendJSON(res, config());
+  if (u.pathname === '/healthz') return sendJSON(res, { ok: true, tap: tapState, clients: wss.clients.size, uptime: Math.round(process.uptime()) });
+  if (u.pathname === '/status') return sendJSON(res, { tap: tapState, audioFormat, track: lastTrack, clients: wss.clients.size, ncs: ncs.info(), ...config() });
   if (u.pathname.startsWith('/vendor/three/')) {
     const f = safeJoin(THREE_DIR, u.pathname.slice('/vendor/three/'.length));
     return f ? sendFile(res, f) : (res.writeHead(403), res.end());
@@ -88,7 +108,14 @@ const server = http.createServer((req, res) => {
   const rel = u.pathname === '/' ? 'index.html' : u.pathname.slice(1);
   const f = safeJoin(WEB, rel);
   return f ? sendFile(res, f) : (res.writeHead(403), res.end());
-});
+};
+
+// https:// unlocks AudioWorklet (and screen sharing) for anyone opening the show from another
+// machine; over plain http:// the browser falls back to ScriptProcessorNode. See the README.
+const TLS = process.env.VF_TLS_CERT && process.env.VF_TLS_KEY
+  ? { cert: fs.readFileSync(process.env.VF_TLS_CERT), key: fs.readFileSync(process.env.VF_TLS_KEY) }
+  : null;
+const server = TLS ? https.createServer(TLS, handler) : http.createServer(handler);
 
 // ---------------------------------------------------------------- WebSocket
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -110,91 +137,21 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify(lastTrack));
 });
 
-// ---------------------------------------------------------------- Native tap supervisor
-let tapProc = null;
-let restartTimer = null;
+// ------------------------------------------------------------- audio capture
+const tap = createAudioSource({
+  root: ROOT,
+  log: (...a) => console.log(...a),
+  onPCM: broadcastBinary,
+  onFormat: (fmt) => { audioFormat = fmt; broadcastJSON({ type: 'audio-format', ...fmt }); },
+  onState: (s) => { if (s !== tapState) { tapState = s; broadcastJSON({ type: 'tap', state: s }); console.log(`[tap] ${s}`); } },
+});
 
-function setTapState(s) {
-  if (s !== tapState) { tapState = s; broadcastJSON({ type: 'tap', state: s }); console.log(`[tap] ${s}`); }
-}
-
-function buildTap(cb) {
-  console.log('[tap] building native/spotifytap (needs Xcode Command Line Tools)...');
-  execFile('sh', [TAP_BUILD], (err, stdout, stderr) => {
-    if (err) { console.error('[tap] build failed:\n' + stderr); return cb(false); }
-    cb(true);
-  });
-}
-
-function startTap() {
-  restartTimer = null;
-  if (!fs.existsSync(TAP_BIN)) {
-    return buildTap((ok) => { if (ok) startTap(); else { setTapState('unavailable'); } });
-  }
-  setTapState('starting');
-  const p = spawn(TAP_BIN, ['com.spotify.client'], { stdio: ['ignore', 'pipe', 'pipe'] });
-  tapProc = p;
-  let pending = Buffer.alloc(0);
-  let errBuf = '';
-
-  p.stdout.on('data', (chunk) => {
-    // keep sample alignment: only forward whole Float32 frames
-    let buf = pending.length ? Buffer.concat([pending, chunk]) : chunk;
-    const usable = buf.length - (buf.length % 4);
-    pending = buf.subarray(usable);
-    if (usable) broadcastBinary(buf.subarray(0, usable));
-  });
-  p.stderr.on('data', (d) => {
-    errBuf += d.toString();
-    let nl;
-    while ((nl = errBuf.indexOf('\n')) >= 0) {
-      const line = errBuf.slice(0, nl).trim(); errBuf = errBuf.slice(nl + 1);
-      if (!line) continue;
-      if (line.startsWith('{')) {
-        try { audioFormat = JSON.parse(line); broadcastJSON({ type: 'audio-format', ...audioFormat }); setTapState('live'); } catch {}
-      } else console.log('[tap]', line);
-    }
-  });
-  p.on('exit', (code) => {
-    tapProc = null;
-    if (code === 2) setTapState('spotify-closed');
-    else if (code === 3) setTapState('permission');
-    else setTapState('stopped');
-    restartTimer = setTimeout(startTap, code === 3 ? 10000 : 3000);
-  });
-  p.on('error', (e) => { console.error('[tap] spawn error', e.message); });
-}
-
-// ---------------------------------------------------------------- Spotify metadata poller
-let polling = false;
-function pollSpotify() {
-  if (polling) return;
-  polling = true;
-  execFile('pgrep', ['-xq', 'Spotify'], (notRunning) => {
-    if (notRunning) {
-      polling = false;
-      const t = { type: 'track', state: 'stopped', ts: Date.now() };
-      if (lastTrack.state !== 'stopped') { lastTrack = t; broadcastJSON(t); }
-      return;
-    }
-    execFile('osascript', [SCRIPT], { timeout: 2000 }, (err, stdout) => {
-      polling = false;
-      if (err) {
-        const t = { type: 'track', state: 'stopped', ts: Date.now() };
-        if (lastTrack.state !== 'stopped') { lastTrack = t; broadcastJSON(t); }
-        return;
-      }
-      const [state, name, artist, album, art, position, duration, id, albumArtist] = stdout.trim().split('\t');
-      lastTrack = {
-        type: 'track', state, name, artist, album, albumArtist: albumArtist || '', art, id,
-        position: parseFloat(position) || 0,
-        duration: (parseFloat(duration) || 0) / 1000,
-        ts: Date.now(),
-      };
-      broadcastJSON(lastTrack);
-    });
-  });
-}
+// ----------------------------------------------------------- now-playing feed
+const meta = createMetadata({
+  intervalMs: POLL_MS,
+  log: (...a) => console.log(...a),
+  onTrack: (t) => { lastTrack = t; broadcastJSON(t); },
+});
 
 function lanAddresses() {
   const out = [];
@@ -205,15 +162,17 @@ function lanAddresses() {
 }
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  Virtual-Fest  →  http://localhost:${PORT}`);
+  const scheme = TLS ? 'https' : 'http';
+  console.log(`\n  Virtual Music Festival  →  ${scheme}://localhost:${PORT}`);
   if (HOST === '0.0.0.0' || HOST === '::') {
-    for (const addr of lanAddresses()) console.log(`                →  http://${addr}:${PORT}`);
+    for (const addr of lanAddresses()) console.log(`                          →  ${scheme}://${addr}:${PORT}`);
   }
   console.log('');
-  startTap();
+  tap.start();
   ncs.start();
-  setInterval(pollSpotify, POLL_MS);
+  meta.start();
 });
 
-process.on('SIGINT', () => { if (tapProc) tapProc.kill('SIGINT'); process.exit(0); });
-process.on('SIGTERM', () => { if (tapProc) tapProc.kill('SIGINT'); process.exit(0); });
+function shutdown() { tap.stop(); meta.stop(); process.exit(0); }
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
