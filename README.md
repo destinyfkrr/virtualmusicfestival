@@ -80,6 +80,10 @@ real GPU, with a "let me in anyway" button for small laptops and desktops that r
 
 ## Screenshots
 
-![The main stage, full rig, 20k crowd](docs/main-stage.jpg)
+![Front of house: lasers, flames and cold sparks over a 20k crowd](docs/front-of-house.jpg)
+
+![The artist name and logo filling the LED wall on a drop](docs/led-wall.jpg)
+
+![Close on the booth, the DJ with both arms up in front of the wall](docs/dj-booth.jpg)
 
 ![The artist logo on the LED wall during a drop](docs/artist-logo-drop.jpg)

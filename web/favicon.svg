@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Virtual Music Festival">
+  <rect width="64" height="64" rx="13" fill="#050506"/>
+  <path d="M12 42 L32 12 L52 42" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="butt" stroke-linejoin="miter"/>
+  <rect x="13" y="49" width="38" height="6" rx="3" fill="#fff" fill-opacity=".6"/>
+</svg>
