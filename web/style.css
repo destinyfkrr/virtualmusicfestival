@@ -1,51 +1,62 @@
+/* the wordmark face: Archivo at width 125, weight 900, self-hosted so the page still works offline.
+   SIL Open Font License, see fonts/OFL.txt */
+@font-face {
+  font-family: "Archivo Expanded";
+  src: url("fonts/archivo-expanded-900.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --fg: #f4f2ff;
-  --dim: rgba(244,242,255,.55);
-  --glass: rgba(10, 8, 24, .55);
-  --accent: #ff2bd6;
-  --accent2: #29e6ff;
+  --fg: #ffffff;
+  --dim: rgba(255,255,255,.52);
+  --glass: rgba(8, 8, 10, .58);
+  --accent: #ffffff;
+  --accent2: #8e8e94;
   font-family: "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #030208; color: var(--fg); overflow: hidden; }
+html, body { margin: 0; height: 100%; background: #050506; color: var(--fg); overflow: hidden; }
 #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
 #enter {
   position: fixed; inset: 0; display: grid; place-items: center; z-index: 50;
-  background: #030208;
+  background: #050506;
   transition: opacity .8s ease;
 }
 #enter.hide { opacity: 0; pointer-events: none; }
 /* the looping clip sits behind the splash, dimmed far enough down that the wordmark and the
    button stay the brightest things on screen; ::after is the veil, painted over the video */
-#bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.3) saturate(.8); }
+#bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) brightness(.32) contrast(1.1); }
 #enter::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 70%, rgba(255,43,214,.22), transparent 60%),
-              radial-gradient(ellipse at 50% 20%, rgba(41,230,255,.16), transparent 55%),
-              linear-gradient(rgba(3,2,8,.55), rgba(3,2,8,.8));
+  background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.06), transparent 55%),
+              linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.78));
 }
-.enter-inner { position: relative; z-index: 1; text-align: center; max-width: 620px; padding: 24px; }
-.wordmark { font-size: clamp(30px, 6.2vw, 62px); font-weight: 900; letter-spacing: .14em; line-height: 1.08; }
-.wordmark span { display: block; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.enter-inner { position: relative; z-index: 1; text-align: center; max-width: 760px; padding: 24px; }
+.wordmark {
+  font-family: "Archivo Expanded", "Helvetica Neue", Arial, sans-serif;
+  font-size: clamp(22px, 4.6vw, 48px); font-weight: 900; letter-spacing: .06em; line-height: 1.14;
+}
+/* second line is the outline of the first, so the lockup reads as a festival mark with no colour in it */
+.wordmark span { display: block; background: none; color: transparent; -webkit-text-stroke: 1.2px rgba(255,255,255,.92); }
 .tag { color: var(--dim); margin: 18px 0 28px; font-size: 15px; line-height: 1.5; }
+.tag b { color: var(--fg); }
 #enter-btn {
   font: inherit; font-weight: 800; letter-spacing: .3em; font-size: 16px; padding: 16px 44px; border-radius: 999px; cursor: pointer;
-  color: #050410; border: 0; background: linear-gradient(90deg, var(--accent), var(--accent2));
-  box-shadow: 0 0 40px rgba(255,43,214,.45), 0 0 80px rgba(41,230,255,.25);
+  color: #08080a; border: 0; background: #fff;
+  box-shadow: 0 0 40px rgba(255,255,255,.22), 0 0 90px rgba(255,255,255,.1);
 }
 #enter-btn:hover { transform: translateY(-1px); }
-.hint { margin-top: 26px; font-size: 12px; color: var(--dim); }
-.hint b { color: var(--fg); }
-
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; transition: opacity .3s; }
 #hud.hide { opacity: 0; }
 #hud > * { pointer-events: auto; }
 .top-left { position: absolute; top: 18px; left: 18px; display: flex; flex-direction: column; gap: 10px; }
 .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(12px); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; width: max-content; }
-.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #ffb020; box-shadow: 0 0 10px #ffb020; }
-.pill.live .dot { background: #34ff8a; box-shadow: 0 0 10px #34ff8a; }
-.pill.bad .dot { background: #ff3b5c; box-shadow: 0 0 10px #ff3b5c; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #6f6f76; box-shadow: 0 0 10px rgba(255,255,255,.25); }
+.pill.live .dot { background: #fff; box-shadow: 0 0 12px rgba(255,255,255,.9); }
+.pill.bad .dot { background: #3a3a40; box-shadow: none; border: 1px solid rgba(255,255,255,.5); }
 .meters { display: flex; gap: 8px; }
 .meter { background: var(--glass); backdrop-filter: blur(12px); border-radius: 10px; padding: 8px 12px; min-width: 76px; }
 .meter label { display: block; font-size: 10px; letter-spacing: .12em; color: var(--dim); }
@@ -66,11 +77,11 @@ html, body { margin: 0; height: 100%; background: #030208; color: var(--fg); ove
 .btn:hover { border-color: rgba(255,255,255,.35); }
 
 #source-menu[hidden] { display: none; }
-#source-menu { position: fixed; z-index: 60; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(460px, 92vw); padding: 22px; border-radius: 18px; background: rgba(8,6,20,.92); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 10px; }
+#source-menu { position: fixed; z-index: 60; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(460px, 92vw); padding: 22px; border-radius: 18px; background: rgba(8,8,10,.92); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 10px; }
 #source-menu h3 { margin: 0 0 6px; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; }
 #source-menu button { font: inherit; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: var(--fg); cursor: pointer; }
 #source-menu button:hover { background: rgba(255,255,255,.1); }
-#source-menu button.active { border-color: var(--accent2); }
+#source-menu button.active { border-color: #fff; }
 #source-menu .row { display: flex; gap: 8px; }
 #source-menu select { flex: 1; font: inherit; padding: 10px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--fg); border: 1px solid rgba(255,255,255,.12); }
 #source-menu .small { font-size: 12px; color: var(--dim); margin: 4px 0; line-height: 1.45; }
@@ -78,7 +89,7 @@ html, body { margin: 0; height: 100%; background: #030208; color: var(--fg); ove
 
 .np-show { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
 .np-show.matched { color: var(--accent2); }
-.meter b.lock { color: #34ff8a; }
+.meter b.lock { color: #fff; }
 #toast { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); padding: 8px 16px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(12px); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; opacity: 0; transition: opacity .25s; pointer-events: none !important; }
 #toast.show { opacity: 1; }
 
@@ -87,14 +98,13 @@ html, body { margin: 0; height: 100%; background: #030208; color: var(--fg); ove
 #gate[hidden] { display: none; }
 #gate {
   position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; overflow: auto;
-  background: radial-gradient(ellipse at 50% 70%, rgba(255,43,214,.2), transparent 60%),
-              radial-gradient(ellipse at 50% 15%, rgba(41,230,255,.16), transparent 55%), #030208;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255,255,255,.07), transparent 60%), #050506;
 }
 .gate-inner { text-align: center; max-width: 520px; padding: 32px 24px; }
 .gate-inner h2 { font-size: clamp(20px, 5vw, 28px); margin: 22px 0 14px; letter-spacing: .02em; }
 .gate-inner p { color: var(--dim); font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
 .gate-how b { color: var(--fg); }
-.wordmark.small { font-size: clamp(26px, 7vw, 40px); letter-spacing: .12em; }
+.wordmark.small { font-size: clamp(19px, 5vw, 30px); letter-spacing: .05em; }
 .wordmark.small span { display: block; }
 .ghost {
   font: inherit; font-size: 13px; margin-top: 12px; padding: 12px 22px; border-radius: 999px; cursor: pointer;
