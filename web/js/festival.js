@@ -6,7 +6,7 @@
 //   Towers       crowd lighting towers, perimeter skytrackers
 //   Wristbands   LED wristbands on half the crowd: waves, chases, kick flashes, drop whiteouts
 //   Festoons     catenary bulb strings + bunting across the field
-//   Gate         entrance arch at the back of the field with a VIRTUAL MUSIC FESTIVAL sign
+//   Gate         entrance arch at the back of the field with a VMF sign
 //   Dressing     PA hangs, sub stacks, rails, stairs, DJ booth gear (stage scale, laid out from dj.js DECK), food stalls
 // All of it is instanced or shader-driven; the per-frame CPU work is a few thousand colour writes.
 import * as THREE from 'three';
@@ -427,7 +427,7 @@ export class Gate {
     const arcPx2 = arcPx.map(p => V3(p.x, p.y, z - 1.0));
     this.arc2 = px.addStrip('gateArc2', arcPx2, 0.5, { zone: 'gate' });
     // sign (readable from both sides)
-    const tex = textTexture('VIRTUAL MUSIC FESTIVAL', 1024, 192);
+    const tex = textTexture('VMF', 1024, 192);
     this.signMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, color: 0xffffff });
     const board = new THREE.Mesh(new THREE.BoxGeometry(40, 8.5, 1.2), dark); board.position.set(0, 33, z); this.group.add(board);
     for (const s of [-1, 1]) { const sign = new THREE.Mesh(new THREE.PlaneGeometry(36, 6.8), this.signMat); sign.position.set(0, 33, z + s * 0.75); if (s < 0) sign.rotation.y = Math.PI; this.group.add(sign); }
