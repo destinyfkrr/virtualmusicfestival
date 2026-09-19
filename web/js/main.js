@@ -15,6 +15,7 @@ director.setClock(audio);
 audio.onAnalysis = (m) => director.ingest(m);
 const stage = new Stage(canvas, director);
 const hud = new Hud(audio, stage, director);
+{ const k = new URLSearchParams(location.search).get('stage'); if (k === 'future' || k === 'main') hud.switchStage(k); }   // ?stage=future opens on the Future Stage
 window.__stage = { audio, director, stage, hud };
 const ncsReady = loadNcsCatalog();   // the NoCopyrightSounds catalog (a local JSON); matches resolve once it is in
 
@@ -95,6 +96,7 @@ addEventListener('keydown', (e) => {
   else if (k === 's') hud.openMenu();
   else if (k === 'l') stage.triggerLogo();
   else if (k === 'p') stage.triggerPyro();
+  else if (k === 't') hud.switchStage();
   else if (k === '-' || k === '=' || k === '+') { stage.setDensity(stage.density + (k === '-' ? -0.1 : 0.1)); hud.flash(`lights ${stage.densityLabel()} (${Math.round(stage.density * 100)}%)`); }
   else if (k === 'd') { director.forceDrop(); hud.flash('drop on next beat'); }
   else if (k === '[' || k === ']') {

@@ -19,6 +19,7 @@ import { Centrepiece, ORIGIN } from './centrepieces.js';
 import { Festival } from './festival.js';
 import { Djs, DECK, FIGURE_LIGHT } from './dj.js';
 import { Fireworks } from './fireworks.js';
+import { FutureStage } from './futurestage.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
 
@@ -195,6 +196,8 @@ export class Stage {
     this._buildRig();
     this._buildPost();
     this.setDensity(this.density);
+    let kind = 'main'; try { if (localStorage.getItem('vf.stage') === 'future') kind = 'future'; } catch {}
+    this.setStageKind(kind, false);
     this.centre = null; this.centreKey = ''; this.allPanels = this.panels;
     this.setProfile(resolveProfile({ name: '', artist: '', id: '' }));
     this._bindCues();
@@ -226,7 +229,7 @@ export class Stage {
   _buildStage() {
     const s = this.big;
     const dark = new THREE.MeshStandardMaterial({ color: 0x0e0e14, roughness: 0.8, metalness: 0.3 });
-    const truss = new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 0.5, metalness: 0.8 });
+    const truss = this.trussMat = new THREE.MeshStandardMaterial({ color: 0x2a2a33, roughness: 0.5, metalness: 0.8 });
     const box = (w, h, d, x, y, z, m = dark) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); s.add(mesh); return mesh; };
     this.riser = [box(56, 2.2, 16, 0, 1.1, -3), box(14, 1.2, 6, 0, 2.8, -2), box(9, 2.2, 3, 0, 4.5, -1)];
     // the DJs: figures behind the players that DJ to the beat grid (dj.js), built at stage scale (DECK.SCALE) so they
@@ -713,6 +716,11 @@ export class Stage {
       case 10: { const a = Math.sin(t * 0.12) * 0.9, r = 5.2 - 1.4 * T, cz = (DECK.Z0 + DECK.STAND_Z) * DECK.SCALE; v.set(Math.sin(a) * r, 7.1 + 0.25 * T, cz + Math.cos(a) * r); look.set(0, 6.75, cz); break; }   // booth close-up: the DJs at work, orbiting slowly in front of the players
       default: v.set(0, 18, 70);
     }
+    const kit = this.kit, s = this.shotIndex;
+    if (kit.lookUp && (s === 0 || s === 3 || s === 6 || s === 8)) {   // the taller set: tilt up, and pull back where there is room (the side shot stays put: the crowd towers stand behind it)
+      look.y += kit.lookUp;
+      if (s !== 3) v.sub(look).multiplyScalar(kit.wide).add(look);
+    }
     v.multiplyScalar(WORLD_SCALE); look.multiplyScalar(WORLD_SCALE);
     if (eye) v.y = eye;
     v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04) * (this.shotIndex === 10 ? 0.4 : 1);   // the close-up gets a gentler kick bounce
@@ -721,6 +729,28 @@ export class Stage {
     this.controls.target.lerp(look, k);
     this.controls.update();
   }
+
+  // ------------------------------------------------------------ stages
+  // Two stages share the LED walls, the rig, the booth and the cameras; only the architecture around them changes.
+  // 'main' is the Mainstage (black truss and steel). 'future' is the Future Stage: a storybook castle (futurestage.js),
+  // built the first time it is chosen. `kit` carries what the taller set needs from the rest of the show: wider and
+  // higher framing on the shots that take in the whole stage, and fireworks that clear the spires.
+  setStageKind(kind, persist = true) {
+    kind = kind === 'future' ? 'future' : 'main';
+    this.stageKind = kind;
+    const fut = kind === 'future';
+    if (fut && !this.future) { this.future = new FutureStage(); this.big.add(this.future.group); }
+    if (this.future) this.future.group.visible = fut;
+    this.kit = fut ? { wide: 1.22, lookUp: 4, fwHigh: 12 } : { wide: 1, lookUp: 0, fwHigh: 0 };
+    this.fw.lift = this.kit.fwHigh;
+    const m = this.trussMat;   // gilded truss on the Future Stage
+    m.color.setHex(fut ? 0xb8892e : 0x2a2a33); m.emissive.setHex(fut ? 0x2a1c06 : 0x000000); m.metalness = fut ? 0.6 : 0.8; m.roughness = fut ? 0.35 : 0.5;
+    this.fest.land.clearBackstage(fut);
+    if (persist) try { localStorage.setItem('vf.stage', kind); } catch {}
+    return kind;
+  }
+  toggleStage() { return this.setStageKind(this.stageKind === 'future' ? 'main' : 'future'); }
+  stageLabel() { return this.stageKind === 'future' ? 'Future Stage' : 'Mainstage'; }
 
   // ------------------------------------------------------------ per-frame
   // ---- rig density (user control). 0.3..1.2; persisted. Scales beam gain, head output, strobe punch and laser groups.
@@ -752,6 +782,7 @@ export class Stage {
     }
     this.crowd.update(show);
     this.fest.update(show, dt, this.levels);
+    if (this.stageKind === 'future') this.future.update(show, dt, this.levels);
     this.djs.update(show, dt);
     this._updateFx(show, dt);
     this._updateCamera(dt, show);

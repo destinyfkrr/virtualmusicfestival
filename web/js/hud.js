@@ -42,6 +42,9 @@ export class Hud {
     this.$('btn-cam').onclick = () => stage.cycleCamera();
     this.$('btn-logo').onclick = () => stage.triggerLogo();
     this.$('btn-pyro').onclick = () => stage.triggerPyro();
+    this.switchStage = (kind) => { if (kind) stage.setStageKind(kind); else stage.toggleStage(); this.$('stage-name').textContent = stage.stageLabel(); this.flash(stage.stageLabel()); };
+    this.$('stage-name').textContent = stage.stageLabel();
+    this.$('btn-stage').onclick = () => this.switchStage();
     this.$('btn-lights').onclick = () => { stage.cycleDensity(); this.flash('lights: ' + stage.densityLabel()); };
     for (const b of this.menu.querySelectorAll('[data-src]')) {
       b.onclick = async () => {

@@ -70,11 +70,18 @@ export class Landscape {
       _m.compose(_v.set(x, 0, z), _q.identity(), _s.set(h * 0.3, h, h * 0.3));
       near.setMatrixAt(i, _m);
     }
-    this.group.add(near);
+    this.group.add(near); this.near = near; this.nearAt = [];
+    for (let i = 0; i < 320; i++) { near.getMatrixAt(i, _m); this.nearAt.push(_m.clone()); }
     // trunks for the near trees are not needed at night; a low mist band hides the ground seam
     const mistMat = new THREE.MeshBasicMaterial({ color: 0x0a0a16, transparent: true, opacity: 0.35, depthWrite: false, fog: false });
     const mist = new THREE.Mesh(new THREE.CylinderGeometry(300, 300, 6, 48, 1, true), mistMat);
     mist.position.y = 2; this.group.add(mist);
+  }
+  // the Future Stage's wings and flora stand where some of the near trees grow: fold those trees away while it is up
+  clearBackstage(on) {
+    const zero = _m.clone().makeScale(0, 0, 0);
+    this.nearAt.forEach((m, i) => { const e = m.elements, hide = on && Math.abs(e[12]) < 100 && e[14] < 46; this.near.setMatrixAt(i, hide ? zero : m); });
+    this.near.instanceMatrix.needsUpdate = true;
   }
 }
 

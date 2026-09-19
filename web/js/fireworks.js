@@ -34,7 +34,7 @@ export class Fireworks {
     const pal = palette && palette.length ? palette : [GOLD];
     for (let k = 0; k < n; k++) {
       const u = n === 1 ? 0 : (k / (n - 1)) * 2 - 1;                                   // spread left to right
-      const x = (u * 34 + rnd(-8, 8)) * wide, z = rnd(-46, -66), y = rnd(46, 62) + high + (n > 3 && k === (n >> 1) ? 6 : 0);
+      const x = (u * 34 + rnd(-8, 8)) * wide, z = rnd(-46, -66), y = rnd(46, 62) + high + (this.lift || 0) + (n > 3 && k === (n >> 1) ? 6 : 0);
       const r = Math.random();
       const color = r < 0.12 ? GOLD : r < 0.2 ? SILVER : pal[(k + Math.floor(Math.random() * 2)) % pal.length];
       const color2 = pal[(k + 1) % pal.length];

@@ -11,6 +11,9 @@ per-artist stage design with a per-song colour theme and the artist's real logo 
   Armin's towers, Tiesto's arch, Eric Prydz's HOLO, the deadmau5 cube, the Excision megawall.
   Unknown artists get their genre's rig.
 - 21 centrepiece designs, 27 LED wall programs, 5 colour theme modes, so no two songs look alike.
+- Two stages. The Mainstage is the black-truss festival rig. The Future Stage wraps the same show in a
+  storybook castle: towers, onion domes, a stained glass rose window, giant mushrooms and fairy lights
+  that chase the song's colours on the drop. Switch with the Stage button or `T`, or open `?stage=future`.
 - Real artist logos, fetched and cached. NoCopyrightSounds releases carry the NCS mark.
 - Runs on macOS, Linux and Windows. Anyone on your network can watch the same show in their browser.
 
