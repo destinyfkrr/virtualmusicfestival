@@ -14,6 +14,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STOPPED = () => ({ type: 'track', state: 'stopped', ts: Date.now() });
 
+// set by createMetadata, so a backend can explain itself when it cannot run
+let log = () => {};
+
 function exec(cmd, args, opts = {}) {
   return new Promise((res) => execFile(cmd, args, { timeout: 4000, ...opts }, (err, stdout, stderr) => res({ err, stdout: String(stdout || ''), stderr: String(stderr || '') })));
 }
@@ -53,7 +56,14 @@ async function readLinux() {
   if (playerctlMissing) return STOPPED();
   const { err, stdout, stderr } = await exec('playerctl', ['--player=spotify,%any', 'metadata', '--format', PLAYERCTL_FMT]);
   if (err) {
-    if (/not found|ENOENT/i.test(stderr) || err.code === 'ENOENT') playerctlMissing = true;
+    if (/not found|ENOENT/i.test(stderr) || err.code === 'ENOENT') {
+      playerctlMissing = true;
+      log('[meta] playerctl not found, so there is no song info. Spotify still publishes it over MPRIS;');
+      log('[meta] playerctl is what reads it. Install it and restart the server:');
+      log('[meta]   Debian/Ubuntu:  sudo apt install playerctl');
+      log('[meta]   Fedora:         sudo dnf install playerctl');
+      log('[meta]   Arch:           sudo pacman -S playerctl');
+    }
     return STOPPED();
   }
   const [status, name, artist, album, art, position, length, trackid, albumArtist] = stdout.trim().split('\t');
@@ -102,7 +112,8 @@ const READERS = { darwin: readMac, linux: readLinux, win32: readWindows };
  * Polls the platform for now-playing metadata and calls onTrack whenever it changes.
  * @param {{onTrack:(t:object)=>void, log?:(...a:any)=>void, intervalMs?:number}} o
  */
-export function createMetadata({ onTrack, log = () => {}, intervalMs = 400 }) {
+export function createMetadata({ onTrack, log: sink = () => {}, intervalMs = 400 }) {
+  log = sink;
   const read = READERS[process.platform];
   let timer = null, busy = false, last = STOPPED();
 
