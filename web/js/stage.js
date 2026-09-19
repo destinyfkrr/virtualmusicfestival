@@ -20,6 +20,7 @@ import { Festival } from './festival.js';
 import { Djs, DECK, FIGURE_LIGHT } from './dj.js';
 import { Fireworks } from './fireworks.js';
 import { FutureStage } from './futurestage.js';
+import { OpenWorld } from './openworld.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
 
@@ -199,6 +200,9 @@ export class Stage {
     let kind = 'main'; try { if (localStorage.getItem('vf.stage') === 'future') kind = 'future'; } catch {}
     this.setStageKind(kind, false);
     try { if (localStorage.getItem('vf.pov') === '1') this.setPov(true, false); } catch {}
+    // open world: walk the grounds as a visitor (see openworld.js); `onNotice` is the HUD's to set
+    this.world = new OpenWorld({ camera: this.camera, canvas: this.canvas, crowd: this.crowd, worldScale: WORLD_SCALE, notify: (m) => this.onNotice && this.onNotice(m) });
+    this.big.add(this.world.group);
     this.centre = null; this.centreKey = ''; this.allPanels = this.panels;
     this.setProfile(resolveProfile({ name: '', artist: '', id: '' }));
     this._bindCues();
@@ -731,6 +735,7 @@ export class Stage {
   // height, their jump on the beat, a head that drifts between the booth and the screens) and cuts to someone else
   // wherever the auto camera would have cut. It only ever looks at the stage.
   setPov(on, persist = true) {
+    if (on && this.world && this.world.on) this.setWorld(false);
     this.pov.on = !!on; this.manualUntil = 0;
     this.controls.enabled = !this.pov.on; // orbiting from inside the crowd would clamp the camera up out of it
     if (this.pov.on) this._povPick();
@@ -740,6 +745,16 @@ export class Stage {
     return this.pov.on;
   }
   togglePov() { return this.setPov(!this.pov.on); }
+  // ---- open world: the viewer walks the site. It owns the camera while it is on, so POV and the orbit controls stand down.
+  setWorld(on) {
+    if (on && this.pov.on) this.setPov(false);
+    this.world.setOn(on); this.manualUntil = 0;
+    this.controls.enabled = !this.world.on;
+    if (!this.world.on) { this.camera.fov = 55; this.camera.near = 0.5; this.camera.updateProjectionMatrix(); this.shotTime = 0; }
+    this.iris.snapIn = 4;
+    return this.world.on;
+  }
+  toggleWorld() { return this.setWorld(!this.world.on); }
   _povPick() {
     const c = this.crowd, P = this.pov;
     // someone with a clear enough view: inside the field the stage faces, not at the very back, on the taller side
@@ -774,6 +789,7 @@ export class Stage {
   setShot(i) { this.manualUntil = 0; this.autoCam = false; this.shotIndex = ((i % SHOTS) + SHOTS) % SHOTS; this.shotTime = 0; this.iris.snapIn = 4; this.shotStartBar = this.director.show.barIndex; }
 
   _updateCamera(dt, show) {
+    if (this.world.on) { this.world.update(dt, show); return; }
     if (performance.now() < this.manualUntil) { this.controls.update(); return; }
     if (this.pov.on) { this._updatePov(dt, show); return; }
     this.shotTime += dt;

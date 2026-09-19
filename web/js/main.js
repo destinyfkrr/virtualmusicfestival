@@ -15,6 +15,7 @@ director.setClock(audio);
 audio.onAnalysis = (m) => director.ingest(m);
 const stage = new Stage(canvas, director);
 const hud = new Hud(audio, stage, director);
+{ const v = new URLSearchParams(location.search).get('walk'); if (v !== null && v !== '0') { hud.setWalk(true); if (v === 'first' || v === '1st') hud.setView(true); } }   // ?walk=1 opens on foot, ?walk=first in first person
 { const v = new URLSearchParams(location.search).get('pov'); if (v !== null) hud.setPov(v !== '0'); }   // ?pov=1 opens in the crowd
 { const k = new URLSearchParams(location.search).get('stage'); if (k === 'future' || k === 'main') hud.switchStage(k); }   // ?stage=future opens on the Future Stage
 window.__stage = { audio, director, stage, hud };
@@ -87,11 +88,19 @@ document.getElementById('enter-btn').onclick = async () => {
   hud.refreshStatus();
 };
 
+addEventListener('keyup', (e) => { stage.world.key(e.key.toLowerCase(), false); });
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
-  if (k === 'f') hud.toggleFullscreen();
+  // walking: the movement keys belong to the walker (S and D would otherwise open the menu and force a drop)
+  if (stage.world.on) {
+    if (stage.world.key(k, true)) { e.preventDefault(); return; }
+    if (k === 'q' || k === 'c') { if (!e.repeat) hud.setView(); return; }
+    if (k === 'v' || k === 'b' || (k >= '0' && k <= '9' && k.length === 1)) hud.setWalk(false);   // a camera key is a way out
+  }
+  if (k === 'g') { if (!e.repeat) hud.setWalk(); }
+  else if (k === 'f') hud.toggleFullscreen();
   else if (k === 'c') stage.cycleCamera();
   else if (k === 'h') hud.toggle();
   else if (k === 's') hud.openMenu();

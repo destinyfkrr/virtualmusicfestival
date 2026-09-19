@@ -17,6 +17,11 @@ per-artist stage design with a per-song colour theme and the artist's real logo 
   Switch with the Stage button or `T`, or open `?stage=future`.
 - POV mode puts you in the crowd. You watch through the eyes of one person, hands and heads around you,
   and the view cuts from person to person with the music. POV button or `V`, or open `?pov=1`.
+- Open world mode lets you walk the festival yourself, like a game. `WASD` or the arrow keys move, the
+  mouse looks around, `Shift` runs, `Space` jumps, and `Q` swaps between third person and first person.
+  You are a visitor: the perimeter fence and the closed exit keep you on the grounds, and the pit, the
+  stage, backstage, the lighting towers and the ride machinery are crew only. Walk button or `G`, or
+  open `?walk=1` (`?walk=first` for first person).
 - Real artist logos, fetched and cached. NoCopyrightSounds releases carry the NCS mark.
 - Runs on macOS, Linux and Windows. Anyone on your network can watch the same show in their browser.
 

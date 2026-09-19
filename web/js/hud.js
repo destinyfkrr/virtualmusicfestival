@@ -45,8 +45,19 @@ export class Hud {
     this.switchStage = (kind) => { if (kind) stage.setStageKind(kind); else stage.toggleStage(); this.$('stage-name').textContent = stage.stageLabel(); this.flash(stage.stageLabel()); };
     this.$('stage-name').textContent = stage.stageLabel();
     this.$('btn-stage').onclick = () => this.switchStage();
-    this.setPov = (on) => { const v = on === undefined ? stage.togglePov() : stage.setPov(on); this.$('btn-pov').classList.toggle('on', v); this.flash(v ? 'POV: in the crowd' : 'POV off'); };
+    this.setPov = (on) => { const v = on === undefined ? stage.togglePov() : stage.setPov(on); this.$('btn-pov').classList.toggle('on', v); this.$('btn-walk').classList.toggle('on', stage.world.on); this.$('btn-view').hidden = !stage.world.on; this.flash(v ? 'POV: in the crowd' : 'POV off'); };
     this.$('btn-pov').onclick = () => this.setPov();
+    // open world: walk the grounds. The stage reports the fences it turns you back at through onNotice.
+    this.setWalk = (on) => {
+      const v = on === undefined ? stage.toggleWorld() : stage.setWorld(on);
+      this.$('btn-walk').classList.toggle('on', v); this.$('btn-view').hidden = !v; this.$('btn-pov').classList.toggle('on', stage.pov.on);
+      this.$('btn-view').textContent = stage.world.first ? '1st person' : '3rd person';
+      this.flash(v ? 'Open world: WASD / arrows move, mouse looks, Shift runs, Space jumps, Q swaps view' : 'Open world off', v ? 4200 : undefined);
+    };
+    this.setView = (first) => { const f = stage.world.setFirst(first === undefined ? !stage.world.first : first); this.$('btn-view').textContent = f ? '1st person' : '3rd person'; this.flash(f ? 'First person' : 'Third person'); };
+    this.$('btn-walk').onclick = (e) => { e.currentTarget.blur(); this.setWalk(); };
+    this.$('btn-view').onclick = (e) => { e.currentTarget.blur(); this.setView(); };
+    stage.onNotice = (m) => this.flash(m);
     this.$('btn-pov').classList.toggle('on', stage.pov.on);
     this.$('btn-lights').onclick = () => { stage.cycleDensity(); this.flash('lights: ' + stage.densityLabel()); };
     for (const b of this.menu.querySelectorAll('[data-src]')) {
