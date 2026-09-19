@@ -36,7 +36,7 @@ const SCREEN_Z = -10.5;
 const reach = a => 1 / Math.hypot(Math.cos(a) / TOP, Math.sin(a) / HALF_W);
 
 // collects coloured geometry and merges it into one mesh (color null = the geometry brings its own vertex colours)
-class Paint {
+export class Paint {
   constructor() { this.geos = []; }
   add(geo, color, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0) {
     let g = geo.index ? geo.toNonIndexed() : geo;
@@ -132,14 +132,14 @@ function faceGeo() {
 }
 
 // outline of a shaped wall in its own plane (closed loop, no doubled points)
-function outline(shape, w, h, n) {
+export function outline(shape, w, h, n) {
   const pts = [], push = (x, y) => { const p = V3(x, y, 0); if (!pts.length || pts[pts.length - 1].distanceTo(p) > 0.05) pts.push(p); };
   for (let i = 0; i <= n; i++) { const y = i / n; push(ledShapeHalf(shape, y, h / w) * w / 2, (y - 0.5) * h); }
   for (let i = n; i >= 0; i--) { const y = i / n; push(-ledShapeHalf(shape, y, h / w) * w / 2, (y - 0.5) * h); }
   if (pts[0].distanceTo(pts[pts.length - 1]) < 0.05) pts.pop();
   return pts;
 }
-const place = (p, cx, cy, cz, ry, lift = 0) => { const z = p.z + lift; return V3(cx + p.x * Math.cos(ry) + z * Math.sin(ry), cy + p.y, cz - p.x * Math.sin(ry) + z * Math.cos(ry)); };
+export const place = (p, cx, cy, cz, ry, lift = 0) => { const z = p.z + lift; return V3(cx + p.x * Math.cos(ry) + z * Math.sin(ry), cy + p.y, cz - p.x * Math.sin(ry) + z * Math.cos(ry)); };
 
 // bud spire: a tapering stem that swells into a closed bud
 const spireProfile = (r, h) => {

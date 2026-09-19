@@ -45,6 +45,11 @@ export class Hud {
     this.switchStage = (kind) => { if (kind) stage.setStageKind(kind); else stage.toggleStage(); this.$('stage-name').textContent = stage.stageLabel(); this.flash(stage.stageLabel()); };
     this.$('stage-name').textContent = stage.stageLabel();
     this.$('btn-stage').onclick = () => this.switchStage();
+    this.setTime = (mode) => { if (mode) stage.setTime(mode); else stage.cycleTime(); this.$('btn-time').textContent = stage.timeLabel(); this.$('btn-time').classList.toggle('on', stage.sky.mode !== 'night'); this.flash('Time: ' + stage.timeLabel()); };
+    this.$('btn-time').textContent = stage.timeLabel(); this.$('btn-time').classList.toggle('on', stage.sky.mode !== 'night');
+    this.$('btn-time').onclick = (e) => { e.currentTarget.blur(); this.setTime(); };
+    this.flyDrones = () => this.flash(stage.flyDrones() ? 'Drone show' : 'Drones already up');
+    this.$('btn-drones').onclick = (e) => { e.currentTarget.blur(); this.flyDrones(); };
     this.setPov = (on) => { const v = on === undefined ? stage.togglePov() : stage.setPov(on); this.$('btn-pov').classList.toggle('on', v); this.$('btn-walk').classList.toggle('on', stage.world.on); this.$('btn-view').hidden = !stage.world.on; this.flash(v ? 'POV: in the crowd' : 'POV off'); };
     this.$('btn-pov').onclick = () => this.setPov();
     // open world: walk the grounds. The stage reports the fences it turns you back at through onNotice.

@@ -20,6 +20,10 @@ import { Festival } from './festival.js';
 import { Djs, DECK, FIGURE_LIGHT } from './dj.js';
 import { Fireworks } from './fireworks.js';
 import { FutureStage } from './futurestage.js';
+import { PrismStage } from './prismstage.js';
+import { OrbitStage } from './orbitstage.js';
+import { Drones } from './drones.js';
+import { Sky, TIMES, TIME_LABEL } from './sky.js';
 import { OpenWorld } from './openworld.js';
 import { colorsFrom, drawProgram, PROGRAM_INFO, PROGRAMS, PROGRAM_NAMES } from './programs.js';
 import { SongRng, resolveProfile } from './artists.js';
@@ -119,6 +123,10 @@ const IMAG_PRESETS = [
 const SPARK_X = [-20, -10, 10, 20];
 const BAND_BINS = [[1, 3], [3, 6], [6, 12], [12, 24], [24, 48], [48, 96], [96, 200], [200, 420]];
 const ZONE = { arch: 0, truss: 1, tower: 2, col: 3, deck: 4, frame: 5, drop: 6, runway: 7, floor: 9, riser: 10 };
+// the stages, in the order T cycles them; every kind but 'main' is a sculpted set with a scenery class of its own
+const STAGE_KINDS = ['main', 'future', 'prism', 'orbit'];
+const STAGE_LABEL = { main: 'Mainstage', future: 'Future Stage', prism: 'Prism Stage', orbit: 'Orbit Stage' };
+const SCENERY = { future: FutureStage, prism: PrismStage, orbit: OrbitStage };
 
 // ---------------------------------------------------------------- rig pixel patterns (shape agnostic, zone aware)
 const pc = new THREE.Color();
@@ -197,7 +205,7 @@ export class Stage {
     this._buildFestival();
     this._buildPost();
     this.setDensity(this.density);
-    let kind = 'main'; try { if (localStorage.getItem('vf.stage') === 'future') kind = 'future'; } catch {}
+    let kind = 'main'; try { const k = localStorage.getItem('vf.stage'); if (STAGE_KINDS.includes(k)) kind = k; } catch {}
     this.setStageKind(kind, false);
     try { if (localStorage.getItem('vf.pov') === '1') this.setPov(true, false); } catch {}
     // open world: walk the grounds as a visitor (see openworld.js); `onNotice` is the HUD's to set
@@ -222,12 +230,15 @@ export class Stage {
     const starGeo = new THREE.BufferGeometry(); const sp = new Float32Array(1800 * 3);
     for (let i = 0; i < 1800; i++) { const a = Math.random() * Math.PI * 2, e = Math.random() * 0.5 + 0.03, r = 480 * WORLD_SCALE; sp[i * 3] = Math.cos(a) * Math.cos(e) * r; sp[i * 3 + 1] = Math.sin(e) * r; sp[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r; }
     starGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-    s.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.1 * WORLD_SCALE, fog: false })));
+    this.stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.1 * WORLD_SCALE, fog: false })); s.add(this.stars);
     this.washLights = [[-26, 14, 32], [0, 16, 44], [26, 14, 32]].map(p => { const l = new THREE.PointLight(0xffffff, 0, 90 * WORLD_SCALE, 1.8); l.position.set(p[0], p[1], p[2]); b.add(l); return l; });
     this.stageLight = new THREE.PointLight(0xffffff, 4 * LIGHT_K, 50 * WORLD_SCALE, 1.8); this.stageLight.position.set(0, 14, 4); b.add(this.stageLight);
     this.crowd = new Crowd(20000, CROWD_SCALE); b.add(this.crowd.mesh); if (this.crowd.phones) b.add(this.crowd.phones);
     this.particles = new Particles(16000); this.particles.sizeK = WORLD_SCALE; b.add(this.particles.points);
     this.fw = new Fireworks(this.particles);   // shells fired from behind the set, bursting over the roof line
+    this.drones = new Drones(); b.add(this.drones.group);   // the drone show: a logo in lights above and behind the set on breakdowns
+    this.sky = new Sky(this, this.stars);   // time of day; night (the default) leaves the black sky exactly as it is
+    try { this.sky.setMode(localStorage.getItem('vf.time') || 'night', true); } catch {}
   }
 
   // ------------------------------------------------------------ set + LED walls + pixel architecture
@@ -289,7 +300,7 @@ export class Stage {
       // picks - so a group throws a wave of fans rather than a web of independently aimed lines.
       laser: (x, y, z, beams, o, grp) => { kit.lasers.add(V3(x, y, z), beams, Object.assign({ meta: { u: 0, grp, side: Math.sign(x) || (li & 1 ? 1 : -1), seed: 0, key: grp * 100 + Math.round(Math.abs(x)) } }, o)); li++; },
     };
-    if (kind === 'future') { kit.scenery = new FutureStage(); g.add(kit.scenery.group); kit.scenery.layout(b, kit, ZONE); }
+    if (SCENERY[kind]) { kit.scenery = new SCENERY[kind](); g.add(kit.scenery.group); kit.scenery.layout(b, kit, ZONE); }
     else this._layoutMain(b, kit);
     g.add(kit.pixels.build());
     // per-pixel coordinates for the pattern functions
@@ -817,6 +828,8 @@ export class Stage {
       look.y += kit.lookUp;
       if (s !== 3) v.sub(look).multiplyScalar(kit.wide).add(look);
     }
+    const dl = this.drones.lift || 0;
+    if (dl > 0.001 && (s === 0 || s === 6)) { look.y += 14 * dl; v.sub(look).multiplyScalar(1 + 0.32 * dl).add(look); }   // a drone formation is up: take it in
     v.multiplyScalar(WORLD_SCALE); look.multiplyScalar(WORLD_SCALE);
     if (eye) v.y = eye;
     v.y += show.kick * (show.phase === 'drop' ? 0.35 : show.phase === 'peak' ? 0.15 : 0.04) * (this.shotIndex === 10 ? 0.4 : 1);   // the close-up gets a gentler kick bounce
@@ -832,22 +845,30 @@ export class Stage {
   // the first time it is chosen. The deck, the booth, the DJs, the artist centrepiece and the cameras are shared;
   // kit.cam carries what a wider, taller set needs from them: wider and higher framing, fireworks that clear the crest.
   setStageKind(kind, persist = true) {
-    kind = kind === 'future' ? 'future' : 'main';
+    kind = STAGE_KINDS.includes(kind) ? kind : 'main';
     this.stageKind = kind;
-    const fut = kind === 'future', kit = this.kits[kind] || this._buildKit(kind);
+    const fut = kind !== 'main', kit = this.kits[kind] || this._buildKit(kind);
     if (kit !== this.kit) {
       this._useKit(kit);
       this.heads.setGain(BEAM_GAIN * (0.7 + 0.3 * this.density));
       if (this.centre) { this.allPanels = this.panels.concat(this.centre.panels); this.pickPattern(true); this.pickProgram(true); }
     }
     this.fw.lift = kit.cam.fwHigh;
+    this.drones.anchor(kit);
     this.fest.land.clearBackstage(fut);
     this.fest.dress.setHangs(!fut);   // no truss to fly the PA from: the Future Stage hides it in the scenery
     if (persist) try { localStorage.setItem('vf.stage', kind); } catch {}
     return kind;
   }
-  toggleStage() { return this.setStageKind(this.stageKind === 'future' ? 'main' : 'future'); }
-  stageLabel() { return this.stageKind === 'future' ? 'Future Stage' : 'Mainstage'; }
+  toggleStage() { return this.setStageKind(STAGE_KINDS[(STAGE_KINDS.indexOf(this.stageKind) + 1) % STAGE_KINDS.length]); }
+  stageLabel() { return STAGE_LABEL[this.stageKind] || 'Mainstage'; }
+  // ---- time of day (sky.js): night, sunset, or a sunset that runs down to night
+  setTime(mode, persist = true) { const m = this.sky.setMode(mode); if (persist) try { localStorage.setItem('vf.time', m); } catch {} return m; }
+  cycleTime() { return this.setTime(TIMES[(TIMES.indexOf(this.sky.mode) + 1) % TIMES.length]); }
+  timeLabel() { return TIME_LABEL[this.sky.mode]; }
+  /** force a drone flight now (key O, and the probes) */
+  flyDrones() { return this.drones.fly(this._droneInfo(), true); }
+  _droneInfo() { const o = this.o, pr = o.profile || {}; return { logoImg: o.logoImg, profile: pr, text: pr.markText || (o.track?.artist || '').split(/,|&|feat/i)[0].trim().toUpperCase() }; }
 
   // ------------------------------------------------------------ per-frame
   // ---- rig density (user control). 0.3..1.2; persisted. Scales beam gain, head output, strobe punch and laser groups.
@@ -1089,6 +1110,7 @@ export class Stage {
     if (t < this.fx.sparkUntil) for (const x of SPARK_X) pr.sparkular(x, 2.4, 4.2, 3, 1.2);
     if (t < this.fx.flameUntil && (this.style.pyro ?? 0.6) > 0.5) for (const f of this.kit.topFlames) pr.flame(f[0], f[1], f[2], 1.3, 6);
     this.fw.update(dt);
+    this.drones.update(show, dt, this._droneInfo(), this.renderer.domElement.height, this.camera.fov);
     pr.update(dt);
   }
 
@@ -1100,7 +1122,8 @@ export class Stage {
     this.washLights.forEach((l, i) => { l.color.copy(cols[i]).lerp(WHITE, show.whiteout); l.intensity = wi; });
     this.stageLight.color.copy(show.colorB).lerp(WHITE, 0.5);
     this.stageLight.intensity = (8 + 30 * show.bass) * (1 - 0.6 * dip) * LIGHT_K;
-    this.crowd.mat.color.copy(show.colorA).multiplyScalar(0.05 + 0.08 * show.energy).add(this.tmpC.setRGB(0.03, 0.03, 0.05));
+    this.sky.update(dt, this.camera);
+    this.crowd.mat.color.copy(show.colorA).multiplyScalar(0.05 + 0.08 * show.energy).add(this.tmpC.setRGB(0.03, 0.03, 0.05)).add(this.sky.crowdDay);
     // Bloom backs off as the rig fills up: hundreds of additive beams plus HDR strobe faces would
     // otherwise stack into a full-screen white haze during drops (dark phases keep the soft glow).
     const load = clamp(this.headLoad * 1.1 + 0.35 * show.strobe, 0, 1.2);

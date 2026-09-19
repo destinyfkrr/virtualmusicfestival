@@ -17,7 +17,8 @@ const stage = new Stage(canvas, director);
 const hud = new Hud(audio, stage, director);
 { const v = new URLSearchParams(location.search).get('walk'); if (v !== null && v !== '0') { hud.setWalk(true); if (v === 'first' || v === '1st') hud.setView(true); } }   // ?walk=1 opens on foot, ?walk=first in first person
 { const v = new URLSearchParams(location.search).get('pov'); if (v !== null) hud.setPov(v !== '0'); }   // ?pov=1 opens in the crowd
-{ const k = new URLSearchParams(location.search).get('stage'); if (k === 'future' || k === 'main') hud.switchStage(k); }   // ?stage=future opens on the Future Stage
+{ const k = new URLSearchParams(location.search).get('stage'); if (['main', 'future', 'prism', 'orbit'].includes(k)) hud.switchStage(k); }   // ?stage=future opens on the Future Stage
+{ const k = new URLSearchParams(location.search).get('time'); if (['night', 'sunset', 'cycle'].includes(k)) hud.setTime(k); }   // ?time=sunset opens at golden hour
 window.__stage = { audio, director, stage, hud };
 const ncsReady = loadNcsCatalog();   // the NoCopyrightSounds catalog (a local JSON); matches resolve once it is in
 
@@ -107,6 +108,8 @@ addEventListener('keydown', (e) => {
   else if (k === 'l') stage.triggerLogo();
   else if (k === 'p') stage.triggerPyro();
   else if (k === 't') hud.switchStage();
+  else if (k === 'n') hud.setTime();
+  else if (k === 'o') { if (!e.repeat) hud.flyDrones(); }
   else if (k === 'v') hud.setPov();
   else if (k === '-' || k === '=' || k === '+') { stage.setDensity(stage.density + (k === '-' ? -0.1 : 0.1)); hud.flash(`lights ${stage.densityLabel()} (${Math.round(stage.density * 100)}%)`); }
   else if (k === 'd') { director.forceDrop(); hud.flash('drop on next beat'); }

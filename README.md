@@ -11,10 +11,19 @@ per-artist stage design with a per-song colour theme and the artist's real logo 
   Armin's towers, Tiesto's arch, Eric Prydz's HOLO, the deadmau5 cube, the Excision megawall.
   Unknown artists get their genre's rig.
 - 21 centrepiece designs, 27 LED wall programs, 5 colour theme modes, so no two songs look alike.
-- Two stages, each its own build. The Mainstage is the black-truss festival rig. The Future Stage has no
+- Four stages, each its own build. The Mainstage is the black-truss festival rig. The Future Stage has no
   truss at all: a sleeping golden oracle under two fans of giant petals, an arch-shaped main screen,
   leaf-shaped side screens, bud spires, a halo that opens on the drop and waterfalls at the edges.
-  Switch with the Stage button or `T`, or open `?stage=future`.
+  The Prism Stage is a mountain of cut crystal with a great gem turning over the booth in a ring of
+  splinters that flies apart on the drop. The Orbit Stage is a brass observatory: a disc-shaped main
+  screen, two great hoops, a turning armillary sphere and ringed planets on pylons.
+  Switch with the Stage button or `T`, or open `?stage=future`, `?stage=prism` or `?stage=orbit`.
+- A drone show on the breakdowns. 720 drones lift off behind the stage and form the artist's logo, or
+  the VMF mark, above and behind the set, then scatter when the drop lands. Drones button or `O` flies
+  one on demand.
+- Time of day. Night is the default: pure black sky and stars. Sunset gives a golden-hour set, and
+  Sunset to night runs the sky down to black over five minutes. Time button or `N`, or open
+  `?time=sunset` or `?time=cycle`.
 - POV mode puts you in the crowd. You watch through the eyes of one person, hands and heads around you,
   and the view cuts from person to person with the music. POV button or `V`, or open `?pov=1`.
 - Open world mode lets you walk the festival yourself, like a game. `WASD` or the arrow keys move, the

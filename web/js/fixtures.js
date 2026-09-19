@@ -297,7 +297,8 @@ export class PixelStrips {
 // ---------------------------------------------------------------- LED panel (canvas → LED shader)
 const ledVert = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 // `shape` cuts the wall to an outline (whole LED cells, so the edge steps like a real shaped screen):
-// 0 rectangle, 1 pointed arch, 2 leaf (pointed top and bottom), 3 pill. ledShapeHalf() is the same outline in JS.
+// 0 rectangle, 1 pointed arch, 2 leaf (pointed top and bottom), 3 pill, 4 shard (crystal: pointed top, cut foot),
+// 5 octa (cut corners), 6 disc (ellipse). ledShapeHalf() is the same outline in JS.
 const ledFrag = /* glsl */`
   uniform sampler2D map; uniform vec2 res; uniform float gain, shape;
   varying vec2 vUv;
@@ -305,7 +306,11 @@ const ledFrag = /* glsl */`
     if (shape < 0.5) return 1.0;
     if (shape < 1.5) { float s = max(0.0, (y - 0.56) / 0.44); return 1.0 - s * s; }
     if (shape < 2.5) { float t = y * 2.0 - 1.0; return 1.0 - t * t; }
-    float a = res.y / res.x, t = abs(y * 2.0 - 1.0); return 1.0 - a + a * sqrt(max(0.0, 1.0 - t * t));
+    float t = abs(y * 2.0 - 1.0);
+    if (shape < 3.5) { float a = res.y / res.x; return 1.0 - a + a * sqrt(max(0.0, 1.0 - t * t)); }
+    if (shape < 4.5) return y > 0.72 ? 1.0 - (y - 0.72) / 0.28 : 0.78 + 0.22 * min(1.0, y / 0.12);
+    if (shape < 5.5) return t < 0.56 ? 1.0 : 1.0 - (t - 0.56) / 0.44 * 0.3;
+    return sqrt(max(0.0, 1.0 - t * t));
   }
   void main(){
     vec2 cc = (floor(vUv * res) + 0.5) / res;
@@ -319,12 +324,15 @@ const ledFrag = /* glsl */`
     gl_FragColor = vec4(col, 1.0);
   }`;
 
-const LED_SHAPES = { rect: 0, arch: 1, leaf: 2, pill: 3 };
+const LED_SHAPES = { rect: 0, arch: 1, leaf: 2, pill: 3, shard: 4, octa: 5, disc: 6 };
 // half width (0..1) of a shaped wall at height y (0..1); `aspect` = height / width, only the pill needs it
 export function ledShapeHalf(shape, y, aspect = 1) {
   if (shape === 'arch') { const s = Math.max(0, (y - 0.56) / 0.44); return 1 - s * s; }
   if (shape === 'leaf') { const t = y * 2 - 1; return 1 - t * t; }
   if (shape === 'pill') { const t = Math.abs(y * 2 - 1); return 1 - aspect + aspect * Math.sqrt(Math.max(0, 1 - t * t)); }
+  if (shape === 'shard') return y > 0.72 ? 1 - (y - 0.72) / 0.28 : 0.78 + 0.22 * Math.min(1, y / 0.12);
+  if (shape === 'octa') { const t = Math.abs(y * 2 - 1); return t < 0.56 ? 1 : 1 - (t - 0.56) / 0.44 * 0.3; }
+  if (shape === 'disc') { const t = Math.abs(y * 2 - 1); return Math.sqrt(Math.max(0, 1 - t * t)); }
   return 1;
 }
 export class LedPanel {
