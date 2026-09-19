@@ -1,42 +1,41 @@
-// Future Stage: a storybook castle built around the same LED walls, rig and booth as the Mainstage. Towers with swept
-// roofs and onion domes, a gabled frontispiece with a stained-glass rose window and a turning astrolabe, hundreds of lit
-// windows, fairy lights along every roofline, pennants on the spires and giant glowing mushrooms beside the set.
+// Future Stage: a stage of its own, not the Mainstage in costume. No truss anywhere. The set is one sculpture, 176 wide
+// and 58 high: a sleeping golden oracle above the booth, wearing a sunburst that opens on the drop and folds away on the
+// breakdown, in front of two fans of giant petals that sweep from the crown down to the ground at either end. The LED
+// walls are shaped and set into the sculpture (a pointed arch under the face, a collar at her throat, leaf screens in
+// the petals), the lights sit on the petals, around the halo and in the bud spires, and water runs at the far ends.
 //
-// Everything is authored in site units (the set's own coordinates: 96 wide, front edge at z 2) and added to stage.big.
-// The architecture sits behind the pixel arches (z <= -11.8) or outside the set's width, so it frames the stage and
-// never covers a wall, a fixture or the DJs. Nothing here stands in the crowd or in the air in front of the stage.
+// Everything is authored in site units (front edge of the deck at z 5) and added to the kit's group inside stage.big.
+// layout() places this stage's own walls, pixels, heads, strobes and lasers through the kit builder, using the same
+// zones and groups as the Mainstage so every pattern, head set and laser cycle plays on it unchanged.
+// Nothing here stands in the crowd or in the air in front of the stage: the water is outside the screens, behind the deck line.
 //
-// Cost: the architecture is one merged vertex-coloured mesh with one Lambert shader (patched for fake architectural
-// uplighting in the show colours, so it needs no lights of its own); windows, fairy lights and flags are one instanced
-// draw each.
+// Cost: the sculpture is one merged vertex-coloured mesh (plus the face) with one Lambert shader patched for fake
+// architectural lighting in the show colours, so it needs no lights of its own; the halo is one instanced draw, the
+// water one shader mesh.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { V3, PixelStrips, pathLine, pathArc, pathPoly } from './fixtures.js';
+import { V3, PixelStrips, LedPanel, ledShapeHalf, pathLine } from './fixtures.js';
 
-const TAU = Math.PI * 2;
+const TAU = Math.PI * 2, DEG = Math.PI / 180;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const gauss = (x, y, cx, cy, sx, sy) => Math.exp(-(((x - cx) / sx) ** 2) - (((y - cy) / sy) ** 2));
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _c2 = new THREE.Color();
 
-// deterministic scatter so the castle is the same castle every visit
+// deterministic scatter so the stage is the same stage every visit
 let _seed = 1;
 const rnd = () => { _seed = (_seed * 16807) % 2147483647; return (_seed - 1) / 2147483646; };
 
-const STONE = 0x7a7786, STONE_DK = 0x5c5966, STONE_LT = 0x94919f, GOLD = 0xd9a436, TEAL = 0x0f6a70, PLUM = 0x5a1e5e, ROSE = 0x8a2440,
-  WOOD = 0x4a2a18, CREAM = 0xe2d8c4, MOSS = 0x2c5a2a, SLATE = 0x27305a;
+const GOLD = 0xd9a436, GOLD_DK = 0x8a5f1c, GOLD_LT = 0xf3cf7a, INDIGO = 0x1c1670, TEAL = 0x10a39c, PLUM = 0x4a1a78, MAGENTA = 0xd42f7c, NIGHT = 0x0c0a24, STEM = 0x0d4a4c;
 
-const WALL_Z = -12.5;    // front face of the back wall
-const FRONT_Z = -11.9;   // front face of the frontispiece (the pixel arches hang at z -11.5)
+const ROOT_Y = 4, HALF_W = 88, TOP = 48;          // the petal fans: rooted behind the booth, 48 up, 88 out to each side
+const FACE = { x: 0, y: 40, z: -10.5, s: 8.5 };   // the oracle's head (unit head scaled by s)
+const SCREEN_Z = -10.5;
 
-// top of the facade at |x| (frontispiece gable in the middle, stepping down to the wings)
-function wallTop(ax) {
-  if (ax < 13) return 41 + 12 * (1 - ax / 13);
-  if (ax < 24) return 39;
-  if (ax < 40) return 33;
-  if (ax < 66) return 25;
-  return 18;
-}
+// how far a petal reaches at angle a from vertical: an ellipse, tall in the middle, long and low at the ends
+const reach = a => 1 / Math.hypot(Math.cos(a) / TOP, Math.sin(a) / HALF_W);
 
-// collects coloured geometry and merges it into one mesh
+// collects coloured geometry and merges it into one mesh (color null = the geometry brings its own vertex colours)
 class Paint {
   constructor() { this.geos = []; }
   add(geo, color, x = 0, y = 0, z = 0, ry = 0, rx = 0, rz = 0) {
@@ -44,420 +43,435 @@ class Paint {
     if (g !== geo) geo.dispose();
     _e.set(rx, ry, rz); _q.setFromEuler(_e);
     g.applyMatrix4(_m.compose(_v.set(x, y, z), _q, _s.set(1, 1, 1)));
-    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
-    const n = g.attributes.position.count, col = new Float32Array(n * 3);
-    _c.set(color);
-    for (let i = 0; i < n; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && !(k === 'color' && color === null)) g.deleteAttribute(k);
+    if (color !== null) {
+      const n = g.attributes.position.count, col = new Float32Array(n * 3);
+      _c.set(color);
+      for (let i = 0; i < n; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
     this.geos.push(g);
   }
   box(w, h, d, x, y, z, color, ry = 0) { this.add(new THREE.BoxGeometry(w, h, d), color, x, y, z, ry); }
   cyl(rTop, rBot, h, x, y0, z, color, seg = 16) { this.add(new THREE.CylinderGeometry(rTop, rBot, h, seg), color, x, y0 + h / 2, z); }
-  ball(r, x, y, z, color) { this.add(new THREE.SphereGeometry(r, 10, 8), color, x, y, z); }
-  lathe(profile, x, y0, z, color, seg = 16) { this.add(new THREE.LatheGeometry(profile.map(p => new THREE.Vector2(p[0], p[1])), seg), color, x, y0, z); }
+  ball(r, x, y, z, color, seg = 12) { this.add(new THREE.SphereGeometry(r, seg, Math.max(6, seg - 4)), color, x, y, z); }
+  lathe(profile, x, y0, z, color, seg = 18) { this.add(new THREE.LatheGeometry(profile.map(p => new THREE.Vector2(Math.max(0.001, p[0]), p[1])), seg), color, x, y0, z); }
   merged() { const g = mergeGeometries(this.geos, false); for (const s of this.geos) s.dispose(); this.geos.length = 0; return g; }
 }
 
-// swept "witch hat" roof: concave from the eave to the point
-const hatProfile = (R, h) => { const p = []; for (let i = 0; i <= 10; i++) { const f = i / 10; p.push([Math.max(0.001, R * Math.pow(1 - f, 1.75)), h * f]); } return p; };
-// onion dome: bulges past the drum, then pinches to a point
-const onionProfile = (R, h) => { const p = []; for (let i = 0; i <= 12; i++) { const f = i / 12; p.push([Math.max(0.001, R * (1 + 0.42 * Math.sin(f * Math.PI * 1.08)) * (1 - Math.pow(f, 2.4))), h * f]); } return p; };
-const hatRadius = (R, f) => R * Math.pow(1 - f, 1.75);
-
-function stainedGlass() {
-  const S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
-  const g = cv.getContext('2d'), c = S / 2;
-  g.fillStyle = '#05030a'; g.fillRect(0, 0, S, S);
-  const jewel = ['#ff2e63', '#ffb627', '#2ec4ff', '#9d4edd', '#2bff9a', '#ff6a1a', '#3a6bff', '#ff4fd8'];
-  const ringR = [[0.78, 0.98, 24], [0.5, 0.76, 12], [0.22, 0.48, 12], [0.0, 0.2, 6]];
-  ringR.forEach(([r0, r1, n], ri) => {
-    for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * TAU + ri * 0.13, a1 = ((i + 1) / n) * TAU + ri * 0.13, am = (a0 + a1) / 2;
-      g.beginPath();
-      if (ri === 1 || ri === 2) {   // petals
-        g.moveTo(c + Math.cos(a0) * r0 * c, c + Math.sin(a0) * r0 * c);
-        g.quadraticCurveTo(c + Math.cos(a0) * r1 * c, c + Math.sin(a0) * r1 * c, c + Math.cos(am) * r1 * c, c + Math.sin(am) * r1 * c);
-        g.quadraticCurveTo(c + Math.cos(a1) * r1 * c, c + Math.sin(a1) * r1 * c, c + Math.cos(a1) * r0 * c, c + Math.sin(a1) * r0 * c);
-        g.arc(c, c, r0 * c, a1, a0, true);
-      } else { g.arc(c, c, r1 * c, a0, a1); g.arc(c, c, Math.max(0.001, r0 * c), a1, a0, true); }
-      g.closePath();
-      const col = jewel[(i * (ri + 2) + ri * 3) % jewel.length];
-      const gr = g.createRadialGradient(c, c, r0 * c, c, c, r1 * c); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.25, col); gr.addColorStop(1, col);
-      g.fillStyle = gr; g.fill();
-      g.lineWidth = 7; g.strokeStyle = '#05030a'; g.stroke();
-    }
-  });
-  g.globalCompositeOperation = 'destination-in'; g.beginPath(); g.arc(c, c, c * 0.985, 0, TAU); g.fill();
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  return tex;
+// ---- petals
+// A petal in its own frame: root at the origin, growing up +y, cupped toward the crowd at its edges, tip curling forward.
+function petalPoint(p, u, v, out) {
+  const w = p.W * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.62)), 0.85);
+  return out.set(v * w, u * p.L, p.cup * v * v * (w / p.W) + p.bend * Math.pow(u, 2.5));
 }
+// the same point on the site: petals fan around the root, a = angle from vertical (positive toward +x)
+function petalWorld(p, u, v, lift = 0) {
+  const q = petalPoint(p, u, v, new THREE.Vector3()), c = Math.cos(p.a), s = Math.sin(p.a);
+  return V3(q.x * c + q.y * s, ROOT_Y + q.y * c - q.x * s, p.z + q.z + lift);
+}
+function petalGeo(p, base, tip, rim) {
+  const NU = 18, NV = 8, pos = [], col = [], idx = [], cb = new THREE.Color(base), ct = new THREE.Color(tip), cr = new THREE.Color(rim), c = new THREE.Color(), q = new THREE.Vector3();
+  for (let i = 0; i <= NU; i++) for (let j = 0; j <= NV; j++) {
+    const u = i / NU, v = j / NV * 2 - 1;
+    petalPoint(p, u, v, q); pos.push(q.x, q.y, q.z);
+    c.copy(cb).lerp(ct, Math.pow(u, 1.3));
+    const vein = Math.abs(v) < 0.01 || Math.abs(v) > 0.99 ? 1 : 0;
+    c.lerp(cr, vein ? 0.9 : 0.12 * (0.5 + 0.5 * Math.cos(u * 40)));   // gold rim and midrib, faint banding between
+    col.push(c.r, c.g, c.b);
+  }
+  for (let i = 0; i < NU; i++) for (let j = 0; j < NV; j++) { const a = i * (NV + 1) + j, b = a + NV + 1; idx.push(a, a + 1, b, a + 1, b + 1, b); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+
+// ---- the face: a unit head looking down +z
+function faceDeform(x, y, z) {
+  let d = 0;
+  if (z > 0) {
+    const ax = Math.abs(x), k = smooth(0.0, 0.45, z);
+    d += 0.2 * Math.exp(-((x / 0.095) ** 2)) * smooth(0.34, -0.12, y) * smooth(-0.3, -0.16, y);     // nose ridge, rising to the tip
+    d += 0.13 * gauss(x, y, 0, -0.17, 0.15, 0.085);                                                    // nose tip
+    d += 0.05 * gauss(ax, y, 0.13, -0.2, 0.06, 0.05);                                                  // nostril wings
+    d += 0.07 * gauss(ax, y, 0.3, 0.32, 0.22, 0.06);                                                   // brows
+    d -= 0.1 * gauss(ax, y, 0.3, 0.19, 0.19, 0.1);                                                     // eye sockets
+    d += 0.075 * gauss(ax, y, 0.3, 0.16, 0.14, 0.055);                                                 // closed lids
+    d -= 0.02 * gauss(ax, y, 0.3, 0.125, 0.15, 0.012);                                                 // lash line
+    d += 0.06 * gauss(ax, y, 0.5, -0.05, 0.2, 0.2);                                                    // cheekbones
+    d += 0.075 * gauss(x, y, 0, -0.4, 0.2, 0.042) + 0.065 * gauss(x, y, 0, -0.5, 0.16, 0.05);          // lips
+    d -= 0.045 * gauss(x, y, 0, -0.448, 0.22, 0.014);                                                  // the line between them
+    d -= 0.03 * gauss(x, y, 0, -0.3, 0.05, 0.05);                                                      // philtrum
+    d += 0.09 * gauss(x, y, 0, -0.78, 0.2, 0.13);                                                      // chin
+    d *= k * 1.4;
+  }
+  const jaw = y < 0 ? 1 - 0.34 * Math.pow(-y, 1.6) : 1;
+  return [x * 0.82 * jaw, y * 1.14, (z + d) * 0.84, d];
+}
+// a point on the face surface (unit head coords in, site coords out)
+function facePoint(x, y, lift = 0) {
+  const z = Math.sqrt(Math.max(0, 1 - x * x - y * y)), p = faceDeform(x, y, z);
+  return V3(FACE.x + p[0] * FACE.s, FACE.y + p[1] * FACE.s, FACE.z + p[2] * FACE.s + lift);
+}
+function faceGeo() {
+  const g = new THREE.SphereGeometry(1, 72, 56), P = g.attributes.position, n = P.count, col = new Float32Array(n * 3);
+  const lo = new THREE.Color(GOLD_DK), mid = new THREE.Color(GOLD), hi = new THREE.Color(GOLD_LT), c = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    const p = faceDeform(P.getX(i), P.getY(i), P.getZ(i));
+    P.setXYZ(i, p[0], p[1], p[2]);
+    const t = clamp(0.5 + p[3] * 5, 0, 1);   // hollows darker, ridges brighter: the features read from the back of the field
+    c.copy(lo).lerp(mid, smooth(0, 0.55, t)).lerp(hi, smooth(0.6, 1, t));
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  g.scale(FACE.s, FACE.s, FACE.s);
+  return g;
+}
+
+// outline of a shaped wall in its own plane (closed loop, no doubled points)
+function outline(shape, w, h, n) {
+  const pts = [], push = (x, y) => { const p = V3(x, y, 0); if (!pts.length || pts[pts.length - 1].distanceTo(p) > 0.05) pts.push(p); };
+  for (let i = 0; i <= n; i++) { const y = i / n; push(ledShapeHalf(shape, y, h / w) * w / 2, (y - 0.5) * h); }
+  for (let i = n; i >= 0; i--) { const y = i / n; push(-ledShapeHalf(shape, y, h / w) * w / 2, (y - 0.5) * h); }
+  if (pts[0].distanceTo(pts[pts.length - 1]) < 0.05) pts.pop();
+  return pts;
+}
+const place = (p, cx, cy, cz, ry, lift = 0) => { const z = p.z + lift; return V3(cx + p.x * Math.cos(ry) + z * Math.sin(ry), cy + p.y, cz - p.x * Math.sin(ry) + z * Math.cos(ry)); };
+
+// bud spire: a tapering stem that swells into a closed bud
+const spireProfile = (r, h) => {
+  const p = [];
+  for (let i = 0; i <= 28; i++) {
+    const f = i / 28, y = f * h;
+    const stem = r * (1.25 - 0.75 * smooth(0, 0.5, f)) + r * 0.5 * Math.exp(-f * 14);
+    const bud = r * 1.55 * Math.sin(Math.PI * clamp((f - 0.58) / 0.42, 0, 1) ** 0.8) * (1 - 0.35 * smooth(0.8, 1, f));
+    p.push([Math.max(stem * (1 - smooth(0.62, 0.72, f)), bud), y]);
+  }
+  p[p.length - 1][0] = 0.001;
+  return p;
+};
 
 export class FutureStage {
   constructor() {
     _seed = 20260919;
     this.group = new THREE.Group();
     this.group.name = 'future-stage';
+    this.t = 0; this.open = 0.5; this.spin = 0;
     this.lights = new PixelStrips('sphere');
-    this.win = [];      // {x, y, z, w, h, ry}
-    this.flagAt = [];   // {x, y, z}
-    this.t = 0; this.spin = 0;
-    const P = this.paint = new Paint(), G = this.glowPaint = new Paint();
-    this._facade(P);
-    this._towers(P);
-    this._wings(P);
-    this._frontDress(P);
-    this._flora(P, G);
-    this._buildPaint(P, G);
-    this._buildGlass();
-    this._buildAstrolabe();
-    this._buildWindows();
-    this._buildFlags();
+  }
+
+  // Places this stage's walls and fixtures through the kit builder, and builds the sculpture around them.
+  layout(b, kit, ZONE) {
+    const P = new Paint(), F = new Paint(), G = new Paint(), TA = new Paint(), TB = new Paint(), E = new Paint();
+    kit.xN = HALF_W; kit.hN = 56;
+    kit.cam = { wide: 1.32, lookUp: 6, fwHigh: 22 };
+
+    // ---- petal fans
+    const back = [], front = [];
+    for (let i = 0; i < 11; i++) { const a = (-80 + 16 * i) * DEG, L = reach(a); back.push({ a, L, W: L * 0.2, cup: 2.2, bend: 3.5, z: -15.5 }); }
+    for (let i = 0; i < 10; i++) { const a = (-72 + 16 * i) * DEG, L = reach(a) * 0.7; front.push({ a, L, W: L * 0.2, cup: 1.6, bend: 2.6, z: -13.2 }); }
+    for (const p of back) P.add(petalGeo(p, INDIGO, TEAL, GOLD), null, 0, ROOT_Y, p.z, 0, 0, -p.a);
+    for (const p of front) P.add(petalGeo(p, PLUM, MAGENTA, GOLD_LT), null, 0, ROOT_Y, p.z, 0, 0, -p.a);
+    // peacock eyes near the tips of the back petals (the middle ones stand behind the halo)
+    for (const p of back) {
+      if (Math.abs(p.a) < 20 * DEG) continue;
+      const c = petalWorld(p, 0.78, 0, 0.5), r = p.L / 60 * 2.7;
+      P.add(new THREE.TorusGeometry(r * 1.08, 0.2, 6, 28), GOLD, c.x, c.y, c.z);
+      TA.add(new THREE.CircleGeometry(r, 28), 0xffffff, c.x, c.y, c.z);
+      TB.add(new THREE.CircleGeometry(r * 0.62, 24), 0xffffff, c.x, c.y, c.z + 0.08);
+      G.add(new THREE.CircleGeometry(r * 0.27, 18), 0xfff0c0, c.x, c.y, c.z + 0.16);
+    }
+
+    // ---- ground line: a long low plinth the petals grow out of
+    P.box(186, 2.6, 7, 0, 1.3, -14.5, NIGHT);
+    P.box(186, 0.35, 7.4, 0, 2.75, -14.5, GOLD);
+    for (const side of [-1, 1]) for (let i = 0; i < 9; i++) P.ball(1.5 + rnd() * 1.6, side * (30 + i * 7 + rnd() * 3), 1.2, -10.6 - rnd() * 1.5, i % 2 ? STEM : NIGHT, 10);
+
+    // ---- the oracle
+    F.add(faceGeo(), null, FACE.x, FACE.y, FACE.z);
+    P.cyl(3.4, 5.4, 8, 0, 25.5, -12.6, GOLD_DK, 20);
+    // shoulders behind the collar, a hood over the head, and a lotus crown rising out of it
+    const sh = new THREE.SphereGeometry(1, 28, 16); sh.scale(19, 5.2, 4.5); P.add(sh, GOLD_DK, 0, 25.6, -13.8);
+    const hood = new THREE.SphereGeometry(1, 40, 28); hood.scale(FACE.s * 0.98, FACE.s * 1.2, FACE.s * 0.95); P.add(hood, INDIGO, 0, FACE.y + 1.2, FACE.z - 2.6);
+    P.add(new THREE.TorusGeometry(FACE.s * 0.93, 0.32, 6, 48, Math.PI * 1.25), GOLD_LT, 0, FACE.y + 1.0, FACE.z + 0.75, 0, 0, -Math.PI * 0.125);
+    for (let i = 0; i < 9; i++) {
+      const a = (-64 + 16 * i) * DEG, L = 11.5 - Math.abs(i - 4) * 1.3, cp = { a, L, W: L * 0.24, cup: 0.8, bend: 1.6, z: 0 };
+      const g = petalGeo(cp, i % 2 ? TEAL : GOLD_DK, i % 2 ? GOLD_LT : GOLD_LT, GOLD_LT);
+      P.add(g, null, Math.sin(a) * 5.2, FACE.y + 4.2 + Math.cos(a) * 4.6, FACE.z - 1.2 - (i % 2) * 0.5, 0, 0, -a);
+    }
+    for (const side of [-1, 1]) {   // earrings: a disc and three drops
+      const ex = side * FACE.s * 0.86, ey = FACE.y - 1.6, ez = FACE.z + 0.6;
+      P.add(new THREE.TorusGeometry(1.5, 0.3, 6, 24), GOLD_LT, ex, ey, ez);
+      TA.add(new THREE.CircleGeometry(1.25, 20), 0xffffff, ex, ey, ez);
+      for (let j = -1; j <= 1; j++) P.add(new THREE.ConeGeometry(0.36, 2.6 - Math.abs(j) * 0.7, 4), GOLD, ex + j * 0.9, ey - 2.9 + Math.abs(j) * 0.35, ez, 0, Math.PI);
+    }                                     // throat, down into the collar
+    P.add(new THREE.TorusGeometry(15.4, 0.45, 8, 48, Math.PI), GOLD, 0, 28.3, -12, 0, 0, Math.PI);   // necklace arcs behind the collar
+    P.add(new THREE.TorusGeometry(12.2, 0.3, 8, 40, Math.PI), GOLD_LT, 0, 28.3, -11.6, 0, 0, Math.PI);
+    // closed eyes: a glowing line under each lid, and a gem on the brow
+    for (const side of [-1, 1]) {
+      const pts = []; for (let i = 0; i <= 10; i++) { const f = i / 10 - 0.5; pts.push(facePoint(side * 0.3 + f * 0.3, 0.125 - 0.035 * Math.cos(f * Math.PI), 0.12)); }
+      E.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 20, 0.11, 5), 0xffffff);
+    }
+    const gem = this.gemAt = facePoint(0, 0.52, 0.35);
+    E.add(new THREE.OctahedronGeometry(0.8), 0xffffff, gem.x, gem.y, gem.z);
+    P.add(new THREE.TorusGeometry(1.15, 0.16, 6, 20), GOLD_LT, gem.x, gem.y, gem.z - 0.2);
+    // diadem: a band over the brow with a row of leaves standing up from it
+    for (let i = 0; i <= 12; i++) {
+      const f = i / 12 - 0.5, c = facePoint(f * 1.5, 0.62 + 0.1 * Math.cos(f * Math.PI), 0.2), h = 2.6 - Math.abs(f) * 2.4;
+      P.add(new THREE.ConeGeometry(0.55, h, 4), i % 2 ? GOLD : GOLD_LT, c.x, c.y + h / 2, c.z - 0.3, Math.PI / 4);
+      if (i % 2 === 0) TA.add(new THREE.SphereGeometry(0.26, 8, 6), 0xffffff, c.x, c.y + h + 0.2, c.z - 0.3);
+    }
+
+    // ---- LED walls, shaped and framed in gold
+    const wall = (cw, ch, w, h, opts, x, y, z, ry, zone, band, per) => {
+      const p = b.panel(new LedPanel(cw, ch, w, h, Object.assign({ noBack: true }, opts)), x, y, z, ry), shape = opts.shape || 'rect';
+      const loop = outline(shape, w + 0.5, h + 0.5, 22);
+      P.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(loop.map(q => place(q, x, y, z, ry, -0.05)), true, 'centripetal'), loop.length * 3, 0.3, 6, true), GOLD);
+      const px = outline(shape, w + 1.3, h + 1.3, per).map(q => place(q, x, y, z, ry, 0.3));
+      px.push(px[0].clone());
+      b.strip('frame', px, 0.28, zone, band);
+      return p;
+    };
+    wall(160, 84, 46, 24, { role: 'main', name: 'main', shape: 'arch' }, 0, 14, SCREEN_Z, 0, ZONE.frame, 3, 60);
+    wall(168, 14, 30, 2.6, { role: 'ribbon', name: 'ribbon', shape: 'pill', gain: 1.1 }, 0, 28.6, -9.6, 0, ZONE.frame, 4, 40);
+    b.panel(new LedPanel(72, 16, 9, 2.1, { gain: 1.0, role: 'booth', name: 'booth' }), 0, 4.5, 0.52);
+    for (const side of [-1, 1]) {
+      wall(56, 84, 14, 21, { role: 'wing', name: 'wing' + side, shape: 'leaf' }, side * 35, 14.5, -8, -side * 0.3, ZONE.frame, side < 0 ? 2 : 5, 36);
+      wall(44, 66, 11, 16.5, { role: 'wing', name: 'wingo' + side, shape: 'leaf' }, side * 62, 11.5, -5, -side * 0.45, ZONE.frame, side < 0 ? 0 : 7, 30);
+      wall(20, 88, 5, 22, { role: 'tower', name: 'tower' + side, shape: 'leaf', gain: 1.0 }, side * 48.5, 16, -2.5, -side * 0.25, ZONE.frame, side < 0 ? 1 : 6, 30);
+      // each leaf stands on a stem
+      P.cyl(0.35, 0.7, 4.2, side * 35, 0, -8.2, GOLD_DK, 8); P.cyl(0.3, 0.6, 3.4, side * 62, 0, -5.2, GOLD_DK, 8); P.cyl(0.3, 0.6, 5.2, side * 48.5, 0, -2.7, GOLD_DK, 8);
+    }
+
+    // ---- bud spires
+    const spires = [[25.5, -9, 30, 1.7, ZONE.col], [48, -7.5, 38, 2.6, ZONE.tower], [74, -6, 27, 2.3, ZONE.tower]];
+    for (const side of [-1, 1]) for (const [ax, z, h, r, zone] of spires) {
+      const x = side * ax, prof = spireProfile(r, h);
+      P.lathe(prof, x, 0, z, STEM, 18);
+      P.lathe(prof.filter((_, i) => i >= 17).map(p => [p[0] * 1.03, p[1]]), x, 0, z, MAGENTA, 18);      // the bud wears colour
+      P.add(new THREE.TorusGeometry(r * 0.9, 0.25, 6, 20), GOLD, x, h * 0.6, z, 0, Math.PI / 2);
+      TB.add(new THREE.SphereGeometry(0.55, 10, 8), 0xffffff, x, h + 0.4, z);
+      // sepals cupping the bud
+      for (let k = 0; k < 6; k++) { const a = k / 6 * TAU; P.add(new THREE.ConeGeometry(r * 0.5, h * 0.2, 4), GOLD_DK, x + Math.sin(a) * r * 1.1, h * 0.66, z + Math.cos(a) * r * 1.1, a, 0.25); }
+      // a pixel vine winding up the stem and round the bud
+      const pts = [], n = Math.round(h * 3.2), turns = h / 7;
+      for (let i = 0; i < n; i++) { const f = i / (n - 1), y = 0.6 + f * (h - 1.2), rr = radiusAt(prof, y) + 0.22, a = f * turns * TAU * side; pts.push(V3(x + Math.sin(a) * rr, y, z + Math.cos(a) * rr)); }
+      b.strip('spire', pts, 0.3, zone, side < 0 ? (ax > 60 ? 0 : 1) : (ax > 60 ? 7 : 6));
+    }
+    kit.topFlames = [[-48, 38.6, -7.5], [48, 38.6, -7.5]];
+
+    // ---- pixel architecture: every petal is drawn in light
+    const edge = (p, v, n, u0 = 0.12) => { const pts = []; for (let i = 0; i < n; i++) pts.push(petalWorld(p, u0 + (1 - u0) * i / (n - 1), v, 0.35)); return pts; };
+    front.forEach((p, i) => { for (const v of [-1, 1]) b.strip('petal', edge(p, v, Math.round(p.L * 1.1)), 0.34, ZONE.arch, i % 8); });
+    back.forEach((p, i) => {
+      for (const v of [-1, 1]) b.strip('crest', edge(p, v, Math.round(p.L * 0.8), 0.45), 0.4, ZONE.arch, (i + 3) % 8);
+      b.strip('rib', edge(p, 0, Math.round(p.L * 0.7), 0.3), 0.3, ZONE.truss, i % 8);
+    });
+    front.forEach((p, i) => b.strip('rib', edge(p, 0, Math.round(p.L * 0.8), 0.2), 0.28, ZONE.truss, (i + 4) % 8));
+    // rays behind the head, where the Mainstage hangs its drips
+    for (let i = 0; i < 15; i++) { const a = (-105 + 15 * i) * DEG; b.strip('ray', pathLine(V3(Math.sin(a) * 10.5, FACE.y + Math.cos(a) * 10.5, -13.6), V3(Math.sin(a) * 17.5, FACE.y + Math.cos(a) * 17.5, -13.6), 12), 0.3, ZONE.drop, i % 8); }
+    // deck, riser, floor and runway lines (the deck is shared with the Mainstage)
+    for (const side of [-1, 1]) b.strip('deckside', pathLine(V3(side * 28.1, 2.25, -11), V3(side * 28.1, 2.25, 5), 33), 0.3, ZONE.deck);
+    b.strip('deckfront', pathLine(V3(-27.5, 2.25, 5.1), V3(27.5, 2.25, 5.1), 111), 0.3, ZONE.deck);
+    b.strip('riser', pathLine(V3(-7, 3.45, 1.1), V3(7, 3.45, 1.1), 31), 0.22, ZONE.riser);
+    for (const x of [-8, 8]) b.strip('runway', pathLine(V3(x, 0.3, 8), V3(x, 0.3, 60), 53), 0.34, ZONE.runway);
+    b.strip('barrier', pathLine(V3(-40, 0.3, 11), V3(40, 0.3, 11), 81), 0.3, ZONE.runway);
+    for (const z of [-9, -6, -3, 0, 3]) b.strip('floor', pathLine(V3(-27, 2.25, z), V3(27, 2.25, z), 55), 0.22, ZONE.floor);
+    // the deck front wears a gold arcade instead of bare black
+    for (let i = 0; i < 14; i++) P.add(new THREE.TorusGeometry(1.9, 0.12, 5, 14, Math.PI), GOLD, -26 + i * 4, 0.15, 5.12);
+    for (const side of [-1, 1]) P.add(new THREE.TorusGeometry(1.0, 0.13, 5, 18), GOLD_LT, side * 6.4, 4.5, 0.56);
+
+    // ---- moving heads, hidden in the sculpture (same zones and counts as the Mainstage rig)
+    const head = b.head, at = (p, u, v, fn, ...rest) => { const q = petalWorld(p, u, v, 0.9); fn(q.x, q.y, q.z, ...rest); };
+    for (const p of front) for (const u of [0.55, 0.7, 0.85, 0.99]) at(p, u, 0, head, 0);
+    back.forEach((p, i) => { for (const u of i === 5 ? [0.8, 0.99] : [0.6, 0.8, 0.99]) at(p, u, 0, head, 1); });
+    for (let i = 0; i < 22; i++) { const a = (-120 + 240 * i / 21) * DEG; head(Math.sin(a) * 12.8, FACE.y + Math.cos(a) * 12.8, -13.2, 2); }
+    for (let i = 0; i < 12; i++) head(-13.75 + i * 2.5, 30.4, -9.3, 2);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 10; i++) head(side * 51.6, 4 + i * 2.9, -5.5, 3, true);
+      for (let i = 0; i < 6; i++) head(side * 25.5, 4 + i * 3.6, -6.9, 4, true);
+      for (const yn of [0.14, 0.38, 0.62, 0.86]) for (const e of [-1, 1]) { const q = place(V3(e * (ledShapeHalf('leaf', yn) * 7 + 0.9), (yn - 0.5) * 21, 0), side * 35, 14.5, -8, -side * 0.3, 0.5); head(q.x, q.y, q.z, 7, true); }
+      for (let i = 0; i < 4; i++) head(side * 74, 6 + i * 4.2, -3.2, 9);
+    }
+    for (let i = 0; i < 18; i++) head(-25.5 + i * 3, 2.4, -9.2, 5, true);
+    for (let i = 0; i < 13; i++) head(-27 + i * 4.5, 2.4, 5.6, 6, true);
+    for (const e of [-1, 1]) for (let i = 0; i < 8; i++) { const yn = 0.58 + 0.4 * i / 7; head(e * (ledShapeHalf('arch', yn) * 23 + 1.2), 2 + yn * 24, -10, 8); }
+
+    // ---- strobes and blinders
+    const st = b.strobe; let k = 0;
+    for (const p of front) for (const u of [0.25, 0.4, 0.62, 0.78]) { const q = petalWorld(p, u, 0, 0.7); st(q.x, q.y, q.z, 'front', k++, { u: (q.x / HALF_W + 1) / 2 }); }
+    k = 0;
+    for (const p of back) for (const u of [0.4, 0.52, 0.7, 0.9]) { const q = petalWorld(p, u, 0, 0.7); st(q.x, q.y, q.z, 'back', k++, { u: (q.x / HALF_W + 1) / 2 }); }
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 13; i++) st(side * 44.4, 5 + i * 2, -5.5, 'tower', i, { u: i / 12, rot: new THREE.Euler(0, -side * 0.4, 0) });
+      for (const y of [2.6, 26.4]) st(side * 35, y, -7.4, 'blinder', 0, { w: 2, h: 1.2, warm: true });
+      for (const x of [20, 38]) st(side * x, 3.6, 5.2, 'blinder', 0, { w: 2, h: 1.2, warm: true });
+    }
+    for (const x of [-12.5, -7.5, -2.5, 2.5, 7.5, 12.5]) st(x, 26.6, -9.4, 'blinder', 0, { w: 2.4, h: 1.2, warm: true });
+    for (let i = 0; i < 37; i++) st(-27 + i * 1.5, 2.9, 5.25, 'deck', i, { w: 0.9, h: 0.35, u: i / 36 });
+
+    // ---- lasers: 16 projectors, as on the Mainstage
+    const laser = b.laser;
+    for (let i = 0; i < 4; i++) laser(-12 + i * 8, 30.7, -9.1, 5, { pitch: -0.05 }, 0);
+    laser(-25.5, 30.6, -9, 5, { pitch: -0.08 }, 1); laser(gem.x, gem.y, gem.z + 0.6, 5, { pitch: -0.12 }, 1); laser(25.5, 30.6, -9, 5, { pitch: -0.08 }, 1);
+    for (const side of [-1, 1]) {
+      laser(side * 48, 33, -4.6, 5, { yaw: -side * 0.4 }, 2);
+      laser(side * 35, 26.6, -7.3, 4, { yaw: -side * 0.2, pitch: 0.05 }, 3);
+    }
+    for (const x of [-12, 12]) laser(x, 2.6, -9.5, 5, { pitch: 0.35 }, 4);
+    for (const x of [-17, 0, 17]) { const yn = x ? 0.8 : 1; laser(x, 2 + yn * 24 + 0.6, -10, 6, { mode: 'cone', pitch: 0.1, spread: 0.5 }, 5); }
+
+    // ---- a garden of lantern buds at the far ends, and the water
+    for (const side of [-1, 1]) for (const [ax, h] of [[56, 4.2], [67, 3], [81, 5], [90, 3.4]]) {
+      const x = side * ax, z = -1.5 - rnd() * 2;
+      P.cyl(0.14, 0.24, h, x, 0, z, STEM, 6);
+      this.lights.addStrip('bud', [V3(x, h + 0.7, z)], 1.7, { kind: 'bud' });
+      for (let j = 0; j < 5; j++) { const a = j / 5 * TAU; P.add(new THREE.ConeGeometry(0.5, 1.5, 4), j % 2 ? PLUM : MAGENTA, x + Math.sin(a) * 0.75, h + 0.5, z + Math.cos(a) * 0.75, a, 0.5); }
+    }
+    this._buildPaint(P, F, G, TA, TB, E);
+    this._buildHalo();
+    this._buildWater();
     this.group.add(this.lights.build());
-    const n = this.lights.total;
-    this.twPhase = new Float32Array(n); this.twSpeed = new Float32Array(n);
-    for (let i = 0; i < n; i++) { this.twPhase[i] = rnd() * TAU; this.twSpeed[i] = 0.6 + rnd() * 2.2; }
     this.group.traverse(o => { o.frustumCulled = false; });
   }
 
-  // a round turret: body, corbelled gallery, swept roof or onion dome, gold finial, a pennant, lights and windows
-  _turret(P, x, z, r, y0, yTop, roofH, roofColor, { onion = false, body = STONE, flag = true, windows = true, big = false } = {}) {
-    P.cyl(r, r * 1.06, yTop - y0, x, y0, z, body, big ? 20 : 14);
-    P.cyl(r * 1.28, r, 0.9, x, yTop - 0.9, z, STONE_DK, big ? 20 : 14);          // corbel
-    P.cyl(r * 1.3, r * 1.3, 0.35, x, yTop, z, GOLD, big ? 20 : 14);              // gold cornice
-    const nM = big ? 14 : 9;
-    for (let i = 0; i < nM; i++) { const a = (i / nM) * TAU; P.box(r * 0.34, 0.8, 0.3, x + Math.sin(a) * r * 1.22, yTop + 0.75, z + Math.cos(a) * r * 1.22, STONE_LT, a); }   // merlons
-    const R = r * (onion ? 1.0 : 1.38), ry0 = yTop + (onion ? 0.35 : 0.5);
-    if (onion) P.cyl(r * 0.92, r * 0.92, 1.2, x, yTop + 0.35, z, STONE_LT, 14);
-    P.lathe(onion ? onionProfile(R, roofH) : hatProfile(R, roofH), x, ry0 + (onion ? 1.2 : 0), z, roofColor, big ? 20 : 14);
-    const tip = ry0 + (onion ? 1.2 : 0) + roofH;
-    P.cyl(0.06, 0.1, 2.6, x, tip - 0.2, z, GOLD, 6); P.ball(0.34, x, tip + 0.5, z, GOLD); P.ball(0.2, x, tip + 1.3, z, GOLD);
-    if (flag) this.flagAt.push({ x, y: tip + 1.9, z });
-    // lights: a ring under the gallery and a spiral up the roof
-    this.lights.addStrip('ring', pathArc(V3(x, yTop + 0.2, z), r * 1.36, -0.1, Math.PI + 0.1, Math.round(r * 9), 'xz'), 0.3, { kind: 'ring' });
-    const sp = [], turns = big ? 3.5 : 2.5, nS = Math.round(roofH * (big ? 5 : 4));
-    for (let i = 0; i < nS; i++) {
-      const f = i / nS * 0.92, a = f * turns * TAU, rr = (onion ? R * (1 + 0.42 * Math.sin(f * Math.PI * 1.08)) * (1 - Math.pow(f, 2.4)) : hatRadius(R, f)) + 0.12;
-      sp.push(V3(x + Math.sin(a) * rr, ry0 + (onion ? 1.2 : 0) + roofH * f, z + Math.cos(a) * rr));
-    }
-    this.lights.addStrip('spiral', sp, 0.28, { kind: 'spiral' });
-    if (windows) {
-      const rows = Math.max(1, Math.floor((yTop - Math.max(y0, 27)) / 4.2));
-      for (let k = 0; k < rows; k++) for (const a of big ? [-0.7, 0, 0.7] : [-0.5, 0.5]) {
-        const y = yTop - 3 - k * 4.2; if (y < y0 + 1.5) continue;
-        this.win.push({ x: x + Math.sin(a) * (r + 0.04), y, z: z + Math.cos(a) * (r + 0.04), w: big ? 0.9 : 0.62, h: big ? 2 : 1.5, ry: a });
-      }
-    }
-    return tip;
-  }
-
-  _battlements(P, x0, x1, y, z, d = 1.6) {
-    const n = Math.max(2, Math.round((x1 - x0) / 1.7));
-    for (let i = 0; i < n; i += 2) P.box((x1 - x0) / n, 1.0, d, x0 + (i + 0.5) * (x1 - x0) / n, y + 0.5, z - d / 2, STONE_LT);
-  }
-
-  _facade(P) {
-    // back wall: a stepped castle silhouette behind the whole set
-    const prof = [[-84, 0], [-84, 18], [-66, 18], [-66, 25], [-40, 25], [-40, 33], [-24, 33], [-24, 39], [-13, 39], [-13, 42], [13, 42], [13, 39], [24, 39], [24, 33], [40, 33], [40, 25], [66, 25], [66, 18], [84, 18], [84, 0]];
-    const sh = new THREE.Shape(); prof.forEach((p, i) => i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1]));
-    P.add(new THREE.ExtrudeGeometry(sh, { depth: 1.6, bevelEnabled: false }), STONE, 0, 0, WALL_Z - 1.6);
-    for (const [a, b, y] of [[13, 24, 39], [24, 40, 33], [40, 66, 25], [66, 84, 18]]) for (const s of [-1, 1]) this._battlements(P, Math.min(s * a, s * b), Math.max(s * a, s * b), y, WALL_Z);
-    // gold string courses and a darker plinth give the wall its storeys
-    for (const [hw, y] of [[84, 17.2], [66, 24.2], [40, 32.2], [24, 38.2]]) { P.box(hw * 2, 0.45, 0.5, 0, y, WALL_Z + 0.2, GOLD); }
-    P.box(168, 3, 0.6, 0, 1.5, WALL_Z + 0.25, STONE_DK);
-    // pilasters break the wall into bays; a gold proscenium arch rings the pixel arches
-    for (let x = 15.6; x < 83; x += 5.2) for (const s of [-1, 1]) { if ([24, 40, 66].some(tx => Math.abs(x - tx) < 2.8)) continue; const h = wallTop(x) - 0.2; P.box(0.9, h, 0.5, s * x, h / 2, WALL_Z + 0.25, STONE_LT); P.box(1.3, 0.5, 0.7, s * x, h - 1.4, WALL_Z + 0.3, GOLD); }
-    P.add(new THREE.TorusGeometry(35.3, 0.42, 6, 96, Math.PI), GOLD, 0, 2, -11.95);
-    // frontispiece: the gabled centre that carries the rose window
-    const fs = new THREE.Shape(); [[-13, 0], [-13, 41], [0, 53], [13, 41], [13, 0]].forEach((p, i) => i ? fs.lineTo(p[0], p[1]) : fs.moveTo(p[0], p[1]));
-    P.add(new THREE.ExtrudeGeometry(fs, { depth: 1.2, bevelEnabled: false }), STONE_LT, 0, 0, FRONT_Z - 1.2);
-    // gable coping in gold, stepped crockets up both rakes
-    for (const s of [-1, 1]) {
-      const len = Math.hypot(13, 12), ang = Math.atan2(12, 13);
-      P.add(new THREE.BoxGeometry(len + 0.6, 0.55, 1.5), GOLD, s * 6.5, 47 + 0.3, FRONT_Z - 0.6, 0, 0, -s * ang);
-      for (let i = 1; i < 8; i++) { const f = i / 8; P.add(new THREE.ConeGeometry(0.32, 1.1, 5), GOLD, s * 13 * (1 - f), 41 + 12 * f + 1.0, FRONT_Z - 0.6); }
-    }
-    P.box(26.6, 0.5, 1.5, 0, 40.6, FRONT_Z - 0.55, GOLD);
-    // sunburst behind the rose window
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * TAU, L = i % 2 ? 2.2 : 3.4, r0 = 5.2;
-      P.add(new THREE.BoxGeometry(L, i % 2 ? 0.16 : 0.26, 0.16), GOLD, Math.cos(a) * (r0 + L / 2), 43.5 + Math.sin(a) * (r0 + L / 2), FRONT_Z + 0.06, 0, 0, a);
-    }
-    P.add(new THREE.TorusGeometry(4.85, 0.32, 8, 40), GOLD, 0, 43.5, FRONT_Z + 0.1);
-    for (const s of [-1, 1]) P.add(new THREE.TorusGeometry(2.85, 0.24, 8, 28), GOLD, s * 32, 29.2, WALL_Z + 0.1);
-    // gold volutes curling off the shoulders
-    for (const s of [-1, 1]) for (const [cx, cy, R] of [[18.5, 40.2, 2.6], [53, 26.4, 2.4]]) {
-      const pts = []; for (let i = 0; i <= 40; i++) { const f = i / 40, a = f * TAU * 1.6, r = R * (1 - f * 0.85); pts.push(V3(s * (cx + Math.cos(a) * r - R), cy + Math.sin(a) * r + R * 0.4, 0)); }
-      P.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.17, 5, false), GOLD, 0, 0, WALL_Z + 0.25);
-    }
-    // a crescent moon over one shoulder and a sun over the other, both lit from within
-    const G = this.glowPaint;
-    const moon = new THREE.Shape(); moon.absarc(0, 0, 2.7, -Math.PI * 0.62, Math.PI * 0.62, false); moon.absarc(1.35, 0, 2.25, Math.PI * 0.76, -Math.PI * 0.76, true);
-    G.add(new THREE.ExtrudeGeometry(moon, { depth: 0.5, bevelEnabled: false }), 0xffe6a8, -32, 37.4, WALL_Z - 0.2, 0, 0, 0.35);
-    P.cyl(0.12, 0.12, 2.2, -32, 33, WALL_Z + 0.05, GOLD, 6);
-    G.add(new THREE.CylinderGeometry(1.9, 1.9, 0.5, 28), 0xffc94a, 32, 37.4, WALL_Z + 0.05, 0, Math.PI / 2, 0);
-    for (let i = 0; i < 16; i++) { const a = (i / 16) * TAU, L = i % 2 ? 1.1 : 1.9; P.add(new THREE.ConeGeometry(0.34, L, 4), GOLD, 32 + Math.cos(a) * (2.2 + L / 2), 37.4 + Math.sin(a) * (2.2 + L / 2), WALL_Z + 0.05, 0, 0, a - Math.PI / 2); }
-    P.cyl(0.12, 0.12, 2.2, 32, 33, WALL_Z + 0.05, GOLD, 6);
-    // the great central tower behind the gable, and the finial over it
-    const tip = this._turret(P, 0, -16.6, 3.4, 38, 55, 10.5, TEAL, { big: true, windows: false });
-    this.crownY = tip;
-    // facade turrets, shorter toward the wings
-    this._turret(P, -13, FRONT_Z - 1.55, 1.5, 0, 46, 8.5, PLUM); this._turret(P, 13, FRONT_Z - 1.55, 1.5, 0, 46, 8.5, PLUM);
-    for (const s of [-1, 1]) {
-      this._turret(P, s * 24, -11.8 - 1.7, 1.7, 0, 42, 6.5, GOLD, { onion: true });
-      this._turret(P, s * 40, -11.8 - 2.0, 2.0, 0, 36, 9, TEAL);
-      this._turret(P, s * 66, -11.8 - 1.8, 1.8, 0, 28.5, 6, ROSE, { onion: true });
-      this._turret(P, s * 84, -11.8 - 2.2, 2.2, 0, 22, 8, SLATE);
-    }
-    // fairy lights along every roofline and up the gable
-    const edge = (pts, per) => this.lights.addStrip('roofline', pathPoly(pts.map(p => V3(p[0], p[1] + 1.25, p[2] ?? WALL_Z + 0.1)), per, false), 0.3, { kind: 'roofline' });
-    for (const s of [-1, 1]) {
-      edge([[s * 82, 18], [s * 68, 18]], 12); edge([[s * 64, 25], [s * 42, 25]], 18); edge([[s * 38, 33], [s * 26, 33]], 10); edge([[s * 22, 39], [s * 15, 39]], 6);
-      this.lights.addStrip('gable', pathLine(V3(s * 12.4, 42.4, FRONT_Z + 0.2), V3(s * 0.5, 53.4, FRONT_Z + 0.2), 26), 0.32, { kind: 'gable' });
-    }
-    this.lights.addStrip('rose', pathArc(V3(0, 43.5, FRONT_Z + 0.5), 5.25, 0, TAU, 44, 'xy', true), 0.3, { kind: 'rose' });
-    // windows: rows across the wall where it shows (above and beside the LED walls)
-    for (let x = -81.4; x <= 81.4; x += 2.6) {
-      const ax = Math.abs(x);
-      if ([13, 24, 40, 66, 84].some(tx => Math.abs(ax - tx) < 2.7)) continue;
-      const front = ax < 13, top = wallTop(ax) - (front ? 3.4 : 2.6);
-      for (let y = 5.5; y < top; y += 3.6) {
-        if (ax < 23.5 && y < 29.5) continue;                 // behind the main wall and ribbon
-        if (ax < 39 && y < 23) continue;                     // behind the wings
-        if (ax < 46 && y < 8) continue;
-        if (Math.hypot(x, y - 43.5) < 9) continue;           // the rose window and its sunburst
-        if (Math.hypot(ax - 32, y - 29.2) < 4) continue;     // side medallions
-        if (ax > 50 && ax < 80 && y < 23.5) continue;        // the wing houses stand here
-        this.win.push({ x, y, z: (front ? FRONT_Z : WALL_Z) + 0.05, w: 0.8, h: 1.9, ry: 0 });
-      }
-    }
-  }
-
-  _towers(P) {
-    // the two great towers flanking the set, just outside and behind the rig towers
-    for (const s of [-1, 1]) {
-      const x = s * 50.6, z = -4.2;
-      P.cyl(3.5, 3.9, 3, x, 0, z, STONE_DK, 20);
-      this._turret(P, x, z, 3.2, 3, 33, 0.01, STONE, { big: true, flag: false });     // shaft + gallery (roof replaced by the lantern below)
-      P.cyl(2.5, 2.5, 8, x, 33.4, z, STONE_LT, 18);                                  // lantern
-      P.cyl(3.0, 2.5, 0.8, x, 40.6, z, STONE_DK, 18); P.cyl(3.05, 3.05, 0.35, x, 41.4, z, GOLD, 18);
-      P.lathe(hatProfile(3.9, 14), x, 41.7, z, s < 0 ? PLUM : PLUM, 20);
-      P.cyl(0.07, 0.12, 3, x, 55.4, z, GOLD, 6); P.ball(0.42, x, 56.4, z, GOLD); P.ball(0.24, x, 57.4, z, GOLD);
-      this.flagAt.push({ x, y: 58.2, z });
-      const sp = []; for (let i = 0; i < 80; i++) { const f = i / 80 * 0.93, a = f * 4 * TAU; sp.push(V3(x + Math.sin(a) * (hatRadius(3.9, f) + 0.12), 41.7 + 14 * f, z + Math.cos(a) * (hatRadius(3.9, f) + 0.12))); }
-      this.lights.addStrip('spiral', sp, 0.3, { kind: 'spiral' });
-      this.lights.addStrip('ring', pathArc(V3(x, 41.2, z), 3.2, -0.1, Math.PI + 0.1, 26, 'xz'), 0.3, { kind: 'ring' });
-      for (const a of [-0.75, 0, 0.75]) this.win.push({ x: x + Math.sin(a) * 2.54, y: 37, z: z + Math.cos(a) * 2.54, w: 0.95, h: 2.6, ry: a });
-      for (let k = 0; k < 5; k++) for (const a of [-0.7, 0.05, 0.8]) this.win.push({ x: x + Math.sin(a + k * 0.2) * 3.3, y: 8 + k * 5, z: z + Math.cos(a + k * 0.2) * 3.3, w: 0.85, h: 2, ry: a + k * 0.2 });
-      // a small bartizan hanging off the shaft
-      this._turret(P, x + s * 3.4, z + 1.2, 1.1, 20, 29, 5, TEAL, { flag: false });
-      P.lathe([[0.001, 0], [1.16, 2.4]], x + s * 3.4, 17.6, z + 1.2, STONE_DK, 12);
-      // brazier bowl under the tower-top flame of the rig tower
-      P.lathe([[0.2, 0], [0.5, 0.25], [1.25, 0.95], [1.35, 1.15]], s * 46, 31.2, 0, GOLD, 12);
-    }
-  }
-
-  _wings(P) {
-    // storybook houses against the wing walls
-    for (const s of [-1, 1]) {
-      for (const [x, w, h, peak, d, body, roof] of [[56.5, 9, 15.5, 7, 3.4, CREAM, ROSE], [73.5, 10.5, 12, 6, 3.0, CREAM, TEAL]]) {
-        const sh = new THREE.Shape(); [[-w / 2, 0], [-w / 2, h], [0, h + peak], [w / 2, h], [w / 2, 0]].forEach((p, i) => i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1]));
-        const zf = WALL_Z + d;
-        P.add(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), body, s * x, 0, WALL_Z);
-        const len = Math.hypot(w / 2, peak) + 1.2, ang = Math.atan2(peak, w / 2);
-        for (const q of [-1, 1]) P.add(new THREE.BoxGeometry(len, 0.5, d + 1.2), roof, s * x + q * (w / 4 + 0.2), h + peak / 2 + 0.15, WALL_Z + d / 2 + 0.3, 0, 0, -q * ang);
-        // half-timbering
-        for (const yy of [h * 0.36, h * 0.7, h]) P.box(w, 0.32, 0.14, s * x, yy, zf + 0.04, WOOD);
-        for (const xx of [-w / 2 + 0.2, -w / 6, w / 6, w / 2 - 0.2]) P.box(0.32, h, 0.14, s * x + xx, h / 2, zf + 0.04, WOOD);
-        P.box(0.32, peak * 0.8, 0.14, s * x, h + peak * 0.4, zf + 0.04, WOOD);
-        P.ball(0.3, s * x, h + peak + 0.7, WALL_Z + d / 2, GOLD);
-        for (const yy of [h * 0.2, h * 0.53, h * 0.85]) for (const xx of [-w / 3, 0, w / 3]) this.win.push({ x: s * x + xx, y: yy, z: zf + 0.12, w: 0.85, h: 1.7, ry: 0 });
-        this.win.push({ x: s * x, y: h + peak * 0.35, z: zf + 0.12, w: 0.8, h: 1.5, ry: 0 });
-        for (const q of [-1, 1]) this.lights.addStrip('eave', pathLine(V3(s * x + q * (w / 2 + 0.5), h - 0.3, zf + 0.75), V3(s * x, h + peak + 0.45, zf + 0.75), 14), 0.28, { kind: 'roofline' });
-      }
-      // a gatehouse arch closing each wing end
-      P.box(5, 9, 2.4, s * 64.8, 4.5, WALL_Z + 1.2, STONE_DK);
-      this.win.push({ x: s * 64.8, y: 3.4, z: WALL_Z + 2.46, w: 2.6, h: 5.6, ry: 0, gate: true });
-    }
-  }
-
-  _frontDress(P) {
-    // stone columns behind the front truss legs, and gold cresting along the front truss
-    for (const s of [-1, 1]) {
-      const x = s * 37.7, z = 4.5;
-      P.cyl(1.35, 1.5, 1.6, x, 0, z, STONE_DK, 14); P.cyl(1.0, 1.1, 22.6, x, 1.6, z, STONE_LT, 14);
-      for (const y of [8, 15, 22]) P.cyl(1.16, 1.16, 0.3, x, y, z, GOLD, 14);
-      P.cyl(1.45, 1.05, 1.0, x, 24.2, z, STONE_DK, 14); P.cyl(1.5, 1.5, 0.3, x, 25.2, z, GOLD, 14);
-      P.lathe(onionProfile(0.95, 2.6), x, 25.5, z, GOLD, 12); P.ball(0.22, x, 28.4, z, GOLD);
-      this.lights.addStrip('col', pathArc(V3(x, 25.0, z), 1.6, 0, TAU, 12, 'xz', true), 0.26, { kind: 'ring' });
-    }
-    for (let x = -35; x <= 35; x += 1.4) P.add(new THREE.ConeGeometry(0.2, x % 7 === 0 ? 1.3 : 0.8, 5), GOLD, x, 25.9 + (x % 7 === 0 ? 0.65 : 0.4), 5.75);
-  }
-
-  _flora(P, G) {
-    // giant mushrooms and lantern buds beside the set (outside its width, clear of the crowd and of every camera line)
-    this.caps = [];
-    for (const s of [-1, 1]) {
-      for (const [x, z, h, R, col] of [[58, 3.5, 9.5, 4.4, 0xff2e63], [64.5, 7.5, 5.6, 2.9, 0x2ec4ff], [71.5, 2.5, 12, 5.2, 0x9d4edd], [78.5, 6.5, 6.4, 3.2, 0xffb627], [86, 3, 8.5, 3.8, 0x2bff9a]]) {
-        const lean = (rnd() - 0.5) * 0.16;
-        P.lathe([[R * 0.2, 0], [R * 0.15, h * 0.35], [R * 0.11, h * 0.8], [R * 0.17, h]], s * x, 0, z, CREAM, 10);
-        P.lathe([[R * 0.17, 0], [R * 0.4, -0.5], [R * 0.17, -0.9]], s * x, h * 0.82, z, CREAM, 10);   // skirt
-        const cap = new THREE.SphereGeometry(R, 18, 8, 0, TAU, 0, Math.PI / 2); cap.scale(1, 0.62, 1);
-        G.add(cap, col, s * x, h, z, 0, lean, 0);
-        const gills = new THREE.CircleGeometry(R * 0.97, 18); G.add(gills, 0x332218, s * x, h + 0.02, z, 0, Math.PI / 2, 0);
-        for (let i = 0; i < 9; i++) {
-          const a = rnd() * TAU, e = 0.25 + rnd() * 1.0, rr = R * Math.sin(e), yy = R * 0.62 * Math.cos(e);
-          const spot = new THREE.SphereGeometry(R * (0.07 + rnd() * 0.06), 7, 5); spot.scale(1, 0.45, 1);
-          G.add(spot, 0xfff2d8, s * x + Math.sin(a) * rr, h + yy + 0.04, z + Math.cos(a) * rr);
-        }
-      }
-      // curling vines with lantern buds climbing the wing wall
-      for (const [x0, top] of [[47, 22], [69, 15]]) {
-        const pts = []; for (let i = 0; i <= 30; i++) { const f = i / 30; pts.push(V3(s * (x0 + Math.sin(f * 7) * 1.6 * (1 - f * 0.3)), f * top, WALL_Z + 0.5 + Math.cos(f * 9) * 0.25)); }
-        P.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.22, 5, false), MOSS);
-        const buds = []; for (let i = 4; i <= 30; i += 4) buds.push(pts[i].clone().add(V3(0, 0, 0.5)));
-        this.lights.addStrip('buds', buds, 0.7, { kind: 'bud' });
-      }
-    }
-  }
-
-  _buildPaint(P, G) {
-    const U = this.uniforms = { uT: { value: 0 }, uWarm: { value: 0.6 }, uWashA: { value: new THREE.Color(1, 1, 1) }, uWashB: { value: new THREE.Color(1, 1, 1) }, uWashK: { value: 0.3 } };
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  _material(flat) {
+    const S = this.shared, U = { uT: S.uT, uWarm: S.uWarm, uWashA: S.uWashA, uWashB: S.uWashB, uWashK: S.uWashK, uFlat: { value: flat } };
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFsPos;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvFsPos = position;');
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vFsPos;\nvarying vec3 vFsNrm;').replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvFsNrm = objectNormal;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvFsPos = position;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vFsPos;\nuniform float uT, uWarm, uWashK;\nuniform vec3 uWashA, uWashB;')
-        .replace('#include <color_fragment>', `#include <color_fragment>
-          // coursed masonry on the grey stone only (gold, roofs and timber stay clean); fades out before it can shimmer
-          vec3 fsC = vColor.rgb;
-          float fsMx = max(fsC.r, max(fsC.g, fsC.b)), fsMn = min(fsC.r, min(fsC.g, fsC.b));
-          float fsStone = (1.0 - smoothstep(0.3, 0.5, (fsMx - fsMn) / max(fsMx, 1e-4))) * (1.0 - smoothstep(0.42, 0.55, fsMx));
-          vec2 fsB = vec2(vFsPos.x + vFsPos.z * 0.8, vFsPos.y) / vec2(1.5, 0.7);
-          fsB.x += 0.5 * floor(mod(fsB.y, 2.0));
-          vec2 fsF = abs(fract(fsB) - 0.5);
-          float fsFade = fsStone * (1.0 - smoothstep(0.06, 0.22, fwidth(fsB.y)));
-          float fsTone = 1.0 - 0.5 * fsFade * max(smoothstep(0.45, 0.49, fsF.x), smoothstep(0.42, 0.48, fsF.y));
-          fsTone *= 1.0 + (fract(sin(dot(floor(fsB), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.4 * fsFade;
-          diffuseColor.rgb *= fsTone;`)
+        .replace('#include <common>', '#include <common>\nvarying vec3 vFsPos;\nvarying vec3 vFsNrm;\nuniform float uT, uWarm, uWashK, uFlat;\nuniform vec3 uWashA, uWashB;')
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          // architectural lighting without lights: warm uplight from the base, show-colour wash chasing up the towers
-          float fsUp = clamp(vFsPos.y / 60.0, 0.0, 1.0), fsSide = clamp(abs(vFsPos.x) / 84.0, 0.0, 1.0);
-          vec3 fsWash = mix(uWashA, uWashB, smoothstep(0.25, 0.75, fsSide));
-          float fsChase = 0.7 + 0.3 * sin(vFsPos.y * 0.3 - uT * 2.2 + fsSide * 5.0);
-          totalEmissiveRadiance += fsC * fsTone * (uWarm * vec3(1.0, 0.7, 0.42) * (0.25 + 1.1 * pow(1.0 - fsUp, 2.0)) + fsWash * uWashK * (0.4 + 0.6 * fsUp) * fsChase);`);
+          // architectural lighting without lights: warm uplight from the ground, the show colours washing out from the
+          // centre, all shaped by a fake key light from low in front so the petals and the face keep their form
+          float fsUp = clamp(vFsPos.y / 58.0, 0.0, 1.0), fsSide = clamp(abs(vFsPos.x) / 88.0, 0.0, 1.0);
+          float fsKey = 0.22 + 0.78 * pow(clamp(dot(normalize(vFsNrm) * faceDirection, normalize(vec3(0.0, -0.5, 0.86))), 0.0, 1.0), 1.4);
+          vec3 fsWash = mix(uWashA, uWashB, smoothstep(0.2, 0.8, fsSide + 0.15 * sin(uT * 0.4)));
+          float fsChase = 0.72 + 0.28 * sin(length(vFsPos.xy - vec2(0.0, 4.0)) * 0.22 - uT * 2.4);
+          vec3 fsWarm = vec3(1.0, 0.72, 0.42) * mix(0.22 + 1.0 * pow(1.0 - fsUp, 2.0), 0.85, uFlat);
+          totalEmissiveRadiance += vColor.rgb * fsKey * (uWarm * fsWarm + fsWash * uWashK * mix(0.45 + 0.55 * fsUp, 0.55, uFlat) * fsChase);`);
     };
-    this.paintMesh = new THREE.Mesh(P.merged(), mat);
-    this.group.add(this.paintMesh);
-    // self-lit pieces (mushroom caps): vertex colours times one pulsing scalar
-    this.glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide });
-    this.glowMesh = new THREE.Mesh(G.merged(), this.glowMat);
-    this.group.add(this.glowMesh);
+    return mat;
+  }
+  _buildPaint(P, F, G, TA, TB, E) {
+    this.shared = { uT: { value: 0 }, uWarm: { value: 0.6 }, uWashA: { value: new THREE.Color(1, 1, 1) }, uWashB: { value: new THREE.Color(1, 1, 1) }, uWashK: { value: 0.3 } };
+    this.group.add(new THREE.Mesh(P.merged(), this._material(0)));
+    this.group.add(new THREE.Mesh(F.merged(), this._material(1)));
+    const glow = () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide });
+    this.glowMat = glow(); this.tintA = glow(); this.tintB = glow(); this.eyeMat = glow();
+    this.group.add(new THREE.Mesh(G.merged(), this.glowMat), new THREE.Mesh(TA.merged(), this.tintA), new THREE.Mesh(TB.merged(), this.tintB), new THREE.Mesh(E.merged(), this.eyeMat));
   }
 
-  _buildGlass() {
-    const tex = this.glassTex = stainedGlass();
-    this.glassMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, transparent: true });
-    const rose = new THREE.Mesh(new THREE.CircleGeometry(4.75, 48), this.glassMat); rose.position.set(0, 43.5, FRONT_Z + 0.08);
-    this.group.add(rose); this.rose = rose;
-    for (const s of [-1, 1]) { const m = new THREE.Mesh(new THREE.CircleGeometry(2.8, 36), this.glassMat); m.position.set(s * 32, 29.2, WALL_Z + 0.08); m.rotation.z = s * 0.3; this.group.add(m); }
-  }
-
-  _buildAstrolabe() {
-    // three gold rings carrying jewels, turning in front of the rose window (clear of the arches below and the wall behind)
-    this.rings = [];
-    const gold = this.ringMat = new THREE.MeshLambertMaterial({ color: GOLD, emissive: new THREE.Color(GOLD).multiplyScalar(0.55) });
-    const gemGeo = new THREE.OctahedronGeometry(0.34, 0);
-    this.gemMats = [0, 1, 2].map(() => new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }));
-    [5.6, 6.3, 7.0].forEach((r, i) => {
-      const pivot = new THREE.Group(); pivot.position.set(0, 43.5, -8.6);
-      const ring = new THREE.Group(); pivot.add(ring);
-      ring.add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.13, 6, 56), gold));
-      const n = 6 + i * 2;
-      for (let k = 0; k < n; k++) { const a = (k / n) * TAU, g = new THREE.Mesh(gemGeo, this.gemMats[i]); g.position.set(Math.cos(a) * r, Math.sin(a) * r, 0); ring.add(g); }
-      this.group.add(pivot); this.rings.push({ pivot, ring, i });
-    });
-  }
-
-  _buildWindows() {
-    const sh = new THREE.Shape(); sh.moveTo(-0.5, -0.5); sh.lineTo(0.5, -0.5); sh.lineTo(0.5, 0.2); sh.absarc(0, 0.2, 0.5, 0, Math.PI, false); sh.lineTo(-0.5, -0.5);
-    const n = this.win.length;
-    const mesh = this.winMesh = new THREE.InstancedMesh(new THREE.ShapeGeometry(sh, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), n);
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
-    this.winSeed = new Float32Array(n);
-    this.win.forEach((w, i) => {
-      _e.set(0, w.ry, 0); _q.setFromEuler(_e);
-      mesh.setMatrixAt(i, _m.compose(_v.set(w.x, w.y, w.z), _q, _s.set(w.w, w.h, 1)));
-      this.winSeed[i] = rnd();
-    });
-    this.group.add(mesh);
-  }
-
-  _buildFlags() {
+  // the sunburst behind the head: two rings of blades that fold back when the music rests and open on the drop
+  _buildHalo() {
+    const p = { L: 1, W: 0.17, cup: 0, bend: 0 }, NU = 8, NV = 2, pos = [], col = [], idx = [], q = new THREE.Vector3();
+    for (let i = 0; i <= NU; i++) for (let j = 0; j <= NV; j++) { const u = i / NU; petalPoint(p, u, j - 1, q); pos.push(q.x, q.y, 0); const k = j === 1 ? 1 : 0.45; col.push(k, k, k); }
+    for (let i = 0; i < NU; i++) for (let j = 0; j < NV; j++) { const a = i * (NV + 1) + j, b = a + NV + 1; idx.push(a, a + 1, b, a + 1, b + 1, b); }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0.55, 0, 0, -0.55, 0, 3.2, 0, 0]), 3));
-    const n = this.flagAt.length;
-    const mesh = this.flagMesh = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }), n);
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
-    this.group.add(mesh);
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+    this.haloN = 26;
+    this.halo = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide }), this.haloN * 2);
+    this.halo.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.haloN * 6).fill(1), 3);
+    this.group.add(this.halo);
+  }
+
+  _buildWater() {
+    const pos = [], uv = [], info = [], idx = [];
+    const quad = (x, y, z, w, h, kind, ph) => {
+      const o = pos.length / 3;
+      for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) { pos.push(x + (u - 0.5) * w, y, z); uv.push(u, v); info.push(y, h, kind, ph); }
+      idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
+    };
+    for (const side of [-1, 1]) {
+      quad(side * 82, 1, -9.4, 9, 15, 0, rnd() * 9); quad(side * 93, 1, -9.8, 6, 10, 0, rnd() * 9);      // falls off the low outer petals
+      for (let i = 0; i < 7; i++) quad(side * (70 + i * 3.2), 0.4, -3.5, 2.2, 5 + 2.5 * Math.sin(i / 6 * Math.PI), 1, rnd() * 9);   // a bow of jets outside the screens
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('aInfo', new THREE.Float32BufferAttribute(info, 4)); g.setIndex(idx);
+    this.waterU = { uT: { value: 0 }, uJet: { value: 0.5 }, uCol: { value: new THREE.Color(0.5, 0.8, 1) }, uGain: { value: 0.6 } };
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.waterU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      vertexShader: /* glsl */`
+        attribute vec4 aInfo; uniform float uT, uJet; varying vec2 vUv; varying vec2 vK;
+        void main(){
+          vUv = uv; vK = aInfo.zw;
+          float h = aInfo.y * (aInfo.z > 0.5 ? uJet * (0.8 + 0.2 * sin(uT * 1.7 + aInfo.w)) : 1.0);
+          vec3 p = position; p.y = aInfo.x + uv.y * h;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: /* glsl */`
+        uniform float uT, uGain; uniform vec3 uCol; varying vec2 vUv; varying vec2 vK;
+        float hash(float n){ return fract(sin(n * 12.9898 + vK.y) * 43758.5453); }
+        void main(){
+          float a;
+          if (vK.x < 0.5) {   // falling sheet: columns of streaks sliding down, mist at the foot
+            float s = hash(floor(vUv.x * 70.0)), f = fract(vUv.y * (0.8 + 1.2 * s) + uT * (0.35 + 0.5 * s));
+            a = (0.16 + 0.5 * smoothstep(0.0, 0.5, f) * smoothstep(1.0, 0.5, f)) * (0.35 + 0.65 * s);
+            a *= smoothstep(0.0, 0.1, vUv.x) * smoothstep(1.0, 0.9, vUv.x) * smoothstep(1.0, 0.85, vUv.y);
+            a += 0.3 * smoothstep(0.18, 0.0, vUv.y);
+          } else {            // jet: a narrow column that feathers open toward the top
+            float x = abs(vUv.x - 0.5) * 2.0, w = 0.1 + 0.55 * vUv.y * vUv.y;
+            a = smoothstep(w, 0.0, x) * (1.0 - 0.7 * vUv.y) * (0.65 + 0.35 * sin(vUv.y * 34.0 - uT * 15.0 + vK.y));
+            a *= smoothstep(1.0, 0.8, vUv.y);
+          }
+          gl_FragColor = vec4(mix(vec3(0.6, 0.82, 1.0), uCol, 0.55) * a * uGain, 1.0);
+        }`,
+    });
+    this.water = new THREE.Mesh(g, mat);
+    this.group.add(this.water);
   }
 
   update(show, dt, levels) {
+    if (!this.shared) return;
     const t = this.t += dt;
     const ph = show.phase, hot = ph === 'drop' || ph === 'peak', calm = ph === 'breakdown' || ph === 'intro' || ph === 'idle';
-    const A = show.colorA, B = show.colorB, C = show.colorC, U = this.uniforms;
-    const energy = clamp(show.energy ?? 0.5, 0, 1), pulse = show.beatPulse ?? 0, kick = show.kick ?? 0;
-    // facade lighting
+    const A = show.colorA, B = show.colorB, C = show.colorC, U = this.shared;
+    const energy = clamp(show.energy ?? 0.5, 0, 1), pulse = show.beatPulse ?? 0, kick = show.kick ?? 0, bass = levels ? levels[1] : 0;
+    // sculpture lighting
     U.uT.value = t;
-    U.uWarm.value += ((calm ? 0.7 : hot ? 0.32 : 0.5) - U.uWarm.value) * Math.min(1, dt * 1.5);
+    U.uWarm.value += ((calm ? 0.62 : hot ? 0.3 : 0.45) - U.uWarm.value) * Math.min(1, dt * 1.5);
     U.uWashA.value.copy(A); U.uWashB.value.copy(B);
-    const washT = (calm ? 0.35 : hot ? 0.95 : 0.6) + (hot ? 0.55 : 0.2) * kick;
+    const washT = (calm ? 0.4 : hot ? 1.0 : 0.62) + (hot ? 0.6 : 0.2) * kick;
     U.uWashK.value += (washT - U.uWashK.value) * Math.min(1, dt * (washT > U.uWashK.value ? 14 : 4));
-    // stained glass breathes with the beat; the astrolabe turns with the energy
-    this.glassMat.color.setScalar(0.75 + 0.5 * pulse + (hot ? 0.35 : 0));
-    this.rose.rotation.z -= dt * (0.03 + 0.12 * energy);
-    this.spin += dt * (0.12 + (hot ? 0.9 : 0.3) * energy);
-    for (const r of this.rings) {
-      const i = r.i, dir = i % 2 ? -1 : 1;
-      r.ring.rotation.z = dir * this.spin * (1 + i * 0.35);
-      r.pivot.rotation.x = Math.sin(this.spin * 0.5 + i * 2.1) * 0.3;
-      r.pivot.rotation.y = Math.cos(this.spin * 0.37 + i * 1.3) * 0.3;
-      this.gemMats[i].color.copy([A, B, C][i]).multiplyScalar(1.2 + 1.6 * pulse);
+    // peacock eyes, bud tips, the oracle's eyes
+    this.tintA.color.copy(A).multiplyScalar(0.7 + 0.9 * pulse + (hot ? 0.5 : 0));
+    this.tintB.color.copy(B).multiplyScalar(0.8 + 0.8 * bass + (hot ? 0.4 : 0));
+    this.glowMat.color.setScalar(0.7 + 0.6 * pulse);
+    if (hot) this.eyeMat.color.copy(C).lerp(_c.set(0xffffff), 0.35).multiplyScalar(1.4 + 2.2 * kick);
+    else this.eyeMat.color.set(0xffd9a0).multiplyScalar(calm ? 0.55 + 0.25 * Math.sin(t * 0.8) : 0.9 + 0.6 * pulse);
+    // the halo opens with the music
+    const openT = hot ? 1 : calm ? 0.12 : ph === 'build' ? 0.45 + 0.4 * energy : 0.55;
+    this.open += (openT - this.open) * Math.min(1, dt * (openT > this.open ? 5 : 0.9));
+    this.spin += dt * (0.02 + 0.1 * energy) * (hot ? 2 : 1);
+    const n = this.haloN, o = this.open, hc = this.halo.instanceColor.array;
+    for (let r = 0; r < 2; r++) for (let i = 0; i < n; i++) {
+      const j = r * n + i, a = (i + r * 0.5) / n * TAU + (r ? -1 : 1) * this.spin, r0 = 7.6, len = (r ? 7 : 11.5) * (0.5 + 0.5 * o) * (1 + 0.06 * pulse * (i & 1 ? 1 : -1));
+      _q.setFromAxisAngle(_v.set(0, 0, 1), -a); _q2.setFromAxisAngle(_v.set(1, 0, 0), -(1 - o) * (r ? 1.0 : 0.75)); _q.multiply(_q2);
+      this.halo.setMatrixAt(j, _m.compose(_v.set(FACE.x + Math.sin(a) * r0, FACE.y + Math.cos(a) * r0, -14.4 - r * 0.4), _q, _s.set(len * 1.15, len, 1)));
+      const wave = 0.5 + 0.5 * Math.sin(i / n * TAU * 3 - t * (hot ? 6 : 1.5)), k = (r ? 0.5 : 0.36) + (hot ? 0.9 : 0.3) * wave * (0.4 + pulse) + 0.25 * o;
+      _c.set(GOLD_LT).lerp(_c2.copy(r ? B : A), hot ? 0.75 : 0.3).multiplyScalar(k);
+      hc[j * 3] = _c.r; hc[j * 3 + 1] = _c.g; hc[j * 3 + 2] = _c.b;
     }
-    this.glowMat.color.setScalar(0.5 + 0.45 * (levels ? levels[1] : 0) + 0.3 * pulse);
-    // windows: warm candle flicker, every fifth one in the show colour, all lifted by their band of the spectrum
-    const wc = this.winMesh.instanceColor.array, ws = this.winSeed, nW = this.win.length;
-    for (let i = 0; i < nW; i++) {
-      const s = ws[i], w = this.win[i];
-      const band = levels ? levels[(Math.abs(w.x) * 0.09) & 7] : 0;
-      const fl = 0.72 + 0.28 * Math.sin(t * (1.5 + s * 4) + s * 40);
-      const k = (w.gate ? 1.5 : 1.0) * fl * (0.75 + 0.9 * band);
-      if (s < 0.2) { const c = s < 0.1 ? A : B; wc[i * 3] = c.r * k * 1.3; wc[i * 3 + 1] = c.g * k * 1.3; wc[i * 3 + 2] = c.b * k * 1.3; }
-      else if (s > 0.93 && !w.gate) { wc[i * 3] = wc[i * 3 + 1] = wc[i * 3 + 2] = 0.015; }   // a few dark rooms
-      else { wc[i * 3] = 1.35 * k; wc[i * 3 + 1] = 0.72 * k; wc[i * 3 + 2] = 0.24 * k; }
-    }
-    this.winMesh.instanceColor.needsUpdate = true;
-    // fairy lights: warm twinkle; on a drop the rooflines chase in the show colours
-    const L = this.lights, tp = this.twPhase, tsp = this.twSpeed;
-    for (const s of L.strips) {
-      const kind = s.meta.kind, chase = hot && kind !== 'bud';
-      for (let j = 0; j < s.count; j++) {
-        const idx = s.start + j, tw = 0.55 + 0.45 * Math.sin(t * tsp[idx] + tp[idx]);
-        if (kind === 'bud') { const c = (j & 1) ? B : C; L.setPixelC(idx, c, 0.9 + 1.2 * tw * (0.4 + pulse)); continue; }
-        if (chase) {
-          const w = Math.sin(j * 0.45 - t * 9) > 0.2 ? 1 : 0.12, c = (j + ((t * 2) | 0)) % 3 === 0 ? A : (j % 3 === 1 ? B : C);
-          L.setPixelC(idx, c, (0.6 + 1.6 * kick) * w + 0.25);
-        } else { const k = (calm ? 1.5 : 1.15) * tw; L.setPixel(idx, 1.5 * k, 0.86 * k, 0.34 * k); }
-      }
-    }
+    this.halo.instanceMatrix.needsUpdate = true; this.halo.instanceColor.needsUpdate = true;
+    // water
+    const W = this.waterU;
+    W.uT.value = t; W.uCol.value.copy(B).lerp(A, 0.5 + 0.5 * Math.sin(t * 0.3));
+    W.uJet.value += ((calm ? 0.45 : hot ? 1 : 0.7) * (0.85 + 0.3 * bass) - W.uJet.value) * Math.min(1, dt * 3);
+    W.uGain.value = (calm ? 0.3 : 0.42) + 0.2 * pulse;
+    // lantern buds
+    const L = this.lights;
+    for (const s of L.strips) for (let j = 0; j < s.count; j++) { const idx = s.start + j; L.setPixelC(idx, (s.idx ?? idx) & 1 ? B : C, 0.8 + 0.9 * (0.5 + 0.5 * Math.sin(t * 1.3 + idx * 1.7)) * (0.5 + pulse)); }
     L.commit();
-    // pennants stream in a breeze
-    const fc = this.flagMesh.instanceColor.array;
-    this.flagAt.forEach((f, i) => {
-      _e.set(0, 0.5 + Math.sin(t * 0.9 + i * 1.7) * 0.5, Math.sin(t * 2.3 + i) * 0.12); _q.setFromEuler(_e);
-      this.flagMesh.setMatrixAt(i, _m.compose(_v.set(f.x, f.y, f.z), _q, _s.set(1, 1, 1)));
-      const c = [A, B, C][i % 3]; fc[i * 3] = 0.25 + c.r * 0.9; fc[i * 3 + 1] = 0.25 + c.g * 0.9; fc[i * 3 + 2] = 0.25 + c.b * 0.9;
-    });
-    this.flagMesh.instanceMatrix.needsUpdate = true; this.flagMesh.instanceColor.needsUpdate = true;
   }
+}
+
+// radius of a lathe profile at height y
+function radiusAt(prof, y) {
+  for (let i = 1; i < prof.length; i++) if (prof[i][1] >= y) { const a = prof[i - 1], b = prof[i], f = (y - a[1]) / Math.max(1e-6, b[1] - a[1]); return a[0] + (b[0] - a[0]) * f; }
+  return prof[prof.length - 1][0];
 }

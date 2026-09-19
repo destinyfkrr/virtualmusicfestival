@@ -45,6 +45,9 @@ export class Hud {
     this.switchStage = (kind) => { if (kind) stage.setStageKind(kind); else stage.toggleStage(); this.$('stage-name').textContent = stage.stageLabel(); this.flash(stage.stageLabel()); };
     this.$('stage-name').textContent = stage.stageLabel();
     this.$('btn-stage').onclick = () => this.switchStage();
+    this.setPov = (on) => { const v = on === undefined ? stage.togglePov() : stage.setPov(on); this.$('btn-pov').classList.toggle('on', v); this.flash(v ? 'POV: in the crowd' : 'POV off'); };
+    this.$('btn-pov').onclick = () => this.setPov();
+    this.$('btn-pov').classList.toggle('on', stage.pov.on);
     this.$('btn-lights').onclick = () => { stage.cycleDensity(); this.flash('lights: ' + stage.densityLabel()); };
     for (const b of this.menu.querySelectorAll('[data-src]')) {
       b.onclick = async () => {

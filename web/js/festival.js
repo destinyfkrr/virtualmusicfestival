@@ -464,13 +464,15 @@ export class Dressing {
     const black = new THREE.MeshStandardMaterial({ color: 0x08080c, roughness: 0.9 });
     const box = (w, h, d, x, y, z, m = dark, ry = 0) => { const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); mesh.position.set(x, y, z); mesh.rotation.y = ry; this.group.add(mesh); return mesh; };
     // PA: line-array hangs under the front truss + ground subs
-    const pa = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.55, 1.1), black, 2 * 14 + 2 * 12);
+    // (subs first, hangs last: setHangs() drops the hangs by shortening the instance count)
+    const pa = this.pa = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.55, 1.1), black, 2 * 14 + 2 * 12);
     let pi = 0;
+    this.bumpers = [];
+    for (const side of [-1, 1]) for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { _m.compose(_v.set(side * (29 + c * 1.6), 0.6 + r * 1.1, 8.2), _q.identity(), _s.set(1, 2, 1.4)); pa.setMatrixAt(pi++, _m); }
     for (const side of [-1, 1]) {
       for (let k = 0; k < 14; k++) { const tilt = k * 0.04; _e.set(tilt, side * 0.35, 0); _q.setFromEuler(_e); _m.compose(_v.set(side * 25.5, 23.6 - k * 0.6 - k * k * 0.012, 7.2 + k * 0.05), _q, _s.set(1, 1, 1)); pa.setMatrixAt(pi++, _m); }
-      for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { _m.compose(_v.set(side * (29 + c * 1.6), 0.6 + r * 1.1, 8.2), _q.identity(), _s.set(1, 2, 1.4)); pa.setMatrixAt(pi++, _m); }
       // hang bumper + chains
-      box(1.8, 0.3, 1.4, side * 25.5, 24.1, 7.2, truss);
+      this.bumpers.push(box(1.8, 0.3, 1.4, side * 25.5, 24.1, 7.2, truss));
       // side stairs
       for (let k = 0; k < 12; k++) box(3, 0.19, 0.6, side * (30 + k * 0.45), 0.095 + k * 0.19, 7.5, dark);
     }
@@ -528,6 +530,8 @@ export class Dressing {
     for (const side of [-1, 1]) for (let z = 14; z < 132; z += 2) { const x = side * (halfW(z) + 4); fencePts.push(V3(x, 0, z), V3(x, 1.2, z)); if (z + 2 < 132) fencePts.push(V3(x, 1.2, z), V3(side * (halfW(z + 2) + 4), 1.2, z + 2)); }
     this.group.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(fencePts), new THREE.LineBasicMaterial({ color: 0x2a2a33 })));
   }
+  // the flown line arrays (and their bumpers) on or off; the ground subs stay
+  setHangs(on) { this.pa.count = on ? 52 : 24; for (const b of this.bumpers) b.visible = on; }
   update(show, px) {
     for (let k = 0; k < this.jogs.length; k++) this.jogs[k].material.color.copy(k ? show.colorB : show.colorA).multiplyScalar(0.8 + 1.5 * show.kick);
     if (this.tableLeds) for (let i = 0; i < this.tableLeds.count; i++) { const u = i / (this.tableLeds.count - 1); _c.copy(u < 0.5 ? show.colorA : show.colorB).multiplyScalar(0.5 + 1.1 * show.kick + 0.3 * show.energy); px.setPixelC(this.tableLeds.start + i, _c, 1); }

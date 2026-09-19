@@ -15,6 +15,7 @@ director.setClock(audio);
 audio.onAnalysis = (m) => director.ingest(m);
 const stage = new Stage(canvas, director);
 const hud = new Hud(audio, stage, director);
+{ const v = new URLSearchParams(location.search).get('pov'); if (v !== null) hud.setPov(v !== '0'); }   // ?pov=1 opens in the crowd
 { const k = new URLSearchParams(location.search).get('stage'); if (k === 'future' || k === 'main') hud.switchStage(k); }   // ?stage=future opens on the Future Stage
 window.__stage = { audio, director, stage, hud };
 const ncsReady = loadNcsCatalog();   // the NoCopyrightSounds catalog (a local JSON); matches resolve once it is in
@@ -97,15 +98,16 @@ addEventListener('keydown', (e) => {
   else if (k === 'l') stage.triggerLogo();
   else if (k === 'p') stage.triggerPyro();
   else if (k === 't') hud.switchStage();
+  else if (k === 'v') hud.setPov();
   else if (k === '-' || k === '=' || k === '+') { stage.setDensity(stage.density + (k === '-' ? -0.1 : 0.1)); hud.flash(`lights ${stage.densityLabel()} (${Math.round(stage.density * 100)}%)`); }
   else if (k === 'd') { director.forceDrop(); hud.flash('drop on next beat'); }
   else if (k === '[' || k === ']') {
     const lead = director.setLead(director.nudge + (k === '[' ? -0.01 : 0.01));
     hud.flash(`sync lead ${Math.round(lead * 1000)} ms (${director.nudge >= 0 ? '+' : ''}${Math.round(director.nudge * 1000)})`);
   }
-  else if (k === 'b') { stage.setShot(10); hud.flash('camera 11 booth'); }
+  else if (k === 'b') { if (stage.pov.on) hud.setPov(false); stage.setShot(10); hud.flash('camera 11 booth'); }
   else if (k === 'i') { stage.triggerImag(); hud.flash('DJ feed on the wings'); }
-  else if (k.length === 1 && k >= '0' && k <= '9') { stage.setShot(k === '0' ? 9 : Number(k) - 1); hud.flash('camera ' + k); }
+  else if (k.length === 1 && k >= '0' && k <= '9') { if (stage.pov.on) hud.setPov(false); stage.setShot(k === '0' ? 9 : Number(k) - 1); hud.flash('camera ' + k); }
   else if (k === 'escape') document.getElementById('source-menu').hidden = true;
 });
 addEventListener('resize', () => stage.resize());
