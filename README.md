@@ -124,12 +124,26 @@ A brass observatory with a turning armillary sphere and ringed planets.
 
 ![Orbit Stage: the brass hoops and armillary sphere over the booth](docs/orbit-stage.jpg)
 
-### More from the Mainstage
+### DJ view
 
-![Front of house: lasers, flames and cold sparks over a 20k crowd](docs/front-of-house.jpg)
+Close on the booth, the DJ working the decks in front of the LED wall.
 
-![The artist name and logo filling the LED wall on a drop](docs/led-wall.jpg)
+![DJ view: close on the booth in front of the lit LED wall](docs/dj-view.jpg)
 
-![Close on the booth, the DJ with both arms up in front of the wall](docs/dj-booth.jpg)
+### Drone show
 
-![The artist logo on the LED wall during a drop](docs/artist-logo-drop.jpg)
+720 drones lift off behind the stage and form the artist's mark above the set.
+
+![Drone show: a drone formation holding the artist's logo above the stage](docs/drone-show.jpg)
+
+### Time of day
+
+Sunset gives a golden-hour set before the sky runs down to night.
+
+![Sunset: the stage lit up under a golden-hour sky](docs/sunset.jpg)
+
+### POV mode
+
+Watch through the eyes of someone in the crowd.
+
+![POV mode: the stage seen from a crowd member's eye level](docs/pov-view.jpg)
