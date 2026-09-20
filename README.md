@@ -100,6 +100,32 @@ real GPU, with a "let me in anyway" button for small laptops and desktops that r
 
 ## Screenshots
 
+### Mainstage
+
+The black-truss festival rig.
+
+![Mainstage: the festival truss rig lit up over a 20k crowd](docs/mainstage.jpg)
+
+### Future Stage
+
+A sleeping golden oracle under two fans of giant petals.
+
+![Future Stage: the golden oracle under its petals](docs/future-stage.jpg)
+
+### Prism Stage
+
+A mountain of cut crystal with a great gem turning over the booth.
+
+![Prism Stage: crystal shards with the gem over the booth](docs/prism-stage.jpg)
+
+### Orbit Stage
+
+A brass observatory with a turning armillary sphere and ringed planets.
+
+![Orbit Stage: the brass hoops and armillary sphere over the booth](docs/orbit-stage.jpg)
+
+### More from the Mainstage
+
 ![Front of house: lasers, flames and cold sparks over a 20k crowd](docs/front-of-house.jpg)
 
 ![The artist name and logo filling the LED wall on a drop](docs/led-wall.jpg)
